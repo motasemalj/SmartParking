@@ -1,0 +1,131 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserType {
+  RESIDENT
+  SECURITY
+  ADMIN
+}
+
+enum PlateType {
+  PERSONAL
+  GUEST
+}
+
+enum PlateStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model User {
+  id            String    @id @default(uuid())
+  name          String
+  phoneNumber   String    @unique
+  homeNumber    String
+  userType      UserType
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  plates        Plate[]
+  notifications Notification[]
+  entries       Entry[]
+  activities    Activity[]
+  temporaryAccess TemporaryAccess[]
+}
+
+model Plate {
+  id            String      @id @default(uuid())
+  plateCode     String
+  plateNumber   String
+  country       String
+  type          PlateType
+  status        PlateStatus @default(PENDING)
+  expiresAt     DateTime?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  userId        String
+  user          User        @relation(fields: [userId], references: [id])
+  entries       Entry[]
+  documents     Document[]
+  activities    Activity[]
+  approvedBy    Security?   @relation(fields: [approvedById], references: [id])
+  approvedById  String?
+}
+
+model Document {
+  id            String    @id @default(uuid())
+  type          String    // e.g., "MULKEYA"
+  url           String
+  plateId       String
+  plate         Plate     @relation(fields: [plateId], references: [id])
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+model Security {
+  id            String    @id @default(uuid())
+  name          String
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  approvedPlates Plate[]
+}
+
+model Entry {
+  id            String    @id @default(uuid())
+  plateId       String
+  plate         Plate     @relation(fields: [plateId], references: [id])
+  userId        String
+  user          User      @relation(fields: [userId], references: [id])
+  type          String    // "ENTRY" or "EXIT"
+  timestamp     DateTime  @default(now())
+}
+
+model Notification {
+  id            String    @id @default(uuid())
+  userId        String
+  user          User      @relation(fields: [userId], references: [id])
+  message       String
+  read          Boolean   @default(false)
+  createdAt     DateTime  @default(now())
+}
+
+model Activity {
+  id            String    @id @default(uuid())
+  type          String    // e.g., "PLATE_APPROVED", "PLATE_REJECTED", "ENTRY", "EXIT"
+  description   String
+  timestamp     DateTime  @default(now())
+  userId        String
+  user          User      @relation(fields: [userId], references: [id])
+  plateId       String
+  plate         Plate     @relation(fields: [plateId], references: [id])
+}
+
+model SystemConfig {
+  id                    String    @id @default(uuid())
+  guestAccessDuration   Int       @default(12) // in hours
+  maxPersonalPlates     Int       @default(2)
+  updatedAt             DateTime  @updatedAt
+}
+
+model TemporaryAccess {
+  id            String    @id @default(uuid())
+  visitorName   String
+  phoneNumber   String
+  purpose       String
+  startTime     DateTime  @default(now())
+  endTime       DateTime
+  status        String    @default("ACTIVE") // ACTIVE or EXPIRED
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  createdById   String
+  createdBy     User      @relation(fields: [createdById], references: [id])
+} 
