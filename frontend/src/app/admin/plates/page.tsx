@@ -1,0 +1,298 @@
+'use client';
+
+import { useSession } from 'next-auth/react';
+import { useRouter } from 'next/navigation';
+import { useEffect, useState } from 'react';
+import axios from 'axios';
+import AdminNav from '../components/AdminNav';
+
+interface Plate {
+  id: string;
+  plateCode: string;
+  plateNumber: string;
+  country: string;
+  type: string;
+  status: 'PENDING' | 'APPROVED' | 'REJECTED';
+  documents: { id: string; url: string }[];
+  user: {
+    id: string;
+    name: string;
+    phoneNumber: string;
+    homeNumber: string;
+  };
+  createdAt: string;
+}
+
+export default function PlatesPage() {
+  const { data: session, status } = useSession();
+  const router = useRouter();
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [plates, setPlates] = useState<Plate[]>([]);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState<Plate['status'] | 'ALL'>('ALL');
+
+  useEffect(() => {
+    if (status === 'unauthenticated') {
+      router.push('/auth/login');
+      return;
+    }
+
+    const fetchPlates = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+
+        if (!session?.accessToken) {
+          console.error('No access token found in session');
+          setError('Authentication required');
+          return;
+        }
+
+        console.log('Fetching plates with token:', session.accessToken);
+        const response = await axios.get(
+          `${process.env.NEXT_PUBLIC_API_URL}/api/admin/plates`,
+          {
+            headers: { Authorization: `Bearer ${session.accessToken}` },
+          }
+        );
+        console.log('Plates response:', response.data);
+        setPlates(response.data);
+      } catch (err: any) {
+        console.error('Error fetching plates:', err.response?.data || err.message);
+        setError(err.response?.data?.message || 'Failed to fetch plates');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    if (session?.accessToken) {
+      fetchPlates();
+    }
+  }, [session, status, router]);
+
+  const handleUpdateStatus = async (plateId: string, newStatus: Plate['status']) => {
+    try {
+      if (!session?.accessToken) {
+        console.error('No access token found in session');
+        return;
+      }
+
+      console.log('Updating plate status with token:', session.accessToken);
+      const response = await axios.patch(
+        `${process.env.NEXT_PUBLIC_API_URL}/api/admin/plates/${plateId}`,
+        { status: newStatus },
+        {
+          headers: { Authorization: `Bearer ${session.accessToken}` },
+        }
+      );
+      console.log('Update response:', response.data);
+
+      setPlates((prevPlates) =>
+        prevPlates.map((plate) =>
+          plate.id === plateId ? { ...plate, status: newStatus } : plate
+        )
+      );
+    } catch (err: any) {
+      console.error('Error updating plate status:', err.response?.data || err.message);
+    }
+  };
+
+  const filteredPlates = plates.filter(
+    (plate) =>
+      (plate.plateCode + plate.plateNumber)
+        .toLowerCase()
+        .includes(searchTerm.toLowerCase()) ||
+      plate.user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      plate.user.phoneNumber.includes(searchTerm) ||
+      plate.user.homeNumber.includes(searchTerm)
+  ).filter(
+    (plate) => statusFilter === 'ALL' || plate.status === statusFilter
+  );
+
+  if (status === 'unauthenticated') {
+    return null;
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-100">
+      <div className="p-8">
+        <div className="max-w-7xl mx-auto">
+          <div className="mb-8">
+            <h1 className="text-2xl font-semibold text-gray-900">Plates</h1>
+            <p className="mt-1 text-sm text-gray-500">
+              Manage and review number plates
+            </p>
+          </div>
+
+          <div className="mb-6">
+            <AdminNav />
+          </div>
+
+          <div className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div className="max-w-lg w-full">
+              <label htmlFor="search" className="sr-only">
+                Search plates
+              </label>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <svg
+                    className="h-5 w-5 text-gray-400"
+                    xmlns="http://www.w3.org/2000/svg"
+                    viewBox="0 0 20 20"
+                    fill="currentColor"
+                    aria-hidden="true"
+                  >
+                    <path
+                      fillRule="evenodd"
+                      d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z"
+                      clipRule="evenodd"
+                    />
+                  </svg>
+                </div>
+                <input
+                  type="text"
+                  name="search"
+                  id="search"
+                  className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                  placeholder="Search plates..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div className="w-full sm:w-48">
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value as Plate['status'] | 'ALL')}
+                className="block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"
+              >
+                <option value="ALL">All Status</option>
+                <option value="PENDING">Pending</option>
+                <option value="APPROVED">Approved</option>
+                <option value="REJECTED">Rejected</option>
+              </select>
+            </div>
+          </div>
+
+          {loading ? (
+            <div className="flex justify-center items-center h-64">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
+            </div>
+          ) : error ? (
+            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
+              {error}
+            </div>
+          ) : filteredPlates.length === 0 ? (
+            <div className="text-center py-12">
+              <p className="text-gray-500">No plates found</p>
+            </div>
+          ) : (
+            <div className="bg-white shadow overflow-hidden sm:rounded-lg">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Plate
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Owner
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Status
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Document
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Actions
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {filteredPlates.map((plate) => (
+                    <tr key={plate.id}>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm font-medium text-gray-900">
+                          {plate.plateCode} {plate.plateNumber}
+                        </div>
+                        <div className="text-sm text-gray-500">
+                          {plate.country} • {plate.type}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm font-medium text-gray-900">
+                          {plate.user.name}
+                        </div>
+                        <div className="text-sm text-gray-500">
+                          {plate.user.phoneNumber}
+                        </div>
+                        <div className="text-sm text-gray-500">
+                          {plate.user.homeNumber}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span
+                          className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                            plate.status === 'APPROVED'
+                              ? 'bg-green-100 text-green-800'
+                              : plate.status === 'REJECTED'
+                              ? 'bg-red-100 text-red-800'
+                              : 'bg-yellow-100 text-yellow-800'
+                          }`}
+                        >
+                          {plate.status}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm">
+                        {plate.documents.length > 0 ? (
+                          <a
+                            href={plate.documents[0].url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-indigo-600 hover:text-indigo-900"
+                          >
+                            View Document
+                          </a>
+                        ) : (
+                          <span className="text-gray-400">No Document</span>
+                        )}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        <div className="flex items-center space-x-4">
+                          <button
+                            onClick={() => handleUpdateStatus(plate.id, 'APPROVED')}
+                            className={`inline-flex items-center px-3 py-1 text-xs font-semibold rounded focus:outline-none focus:ring-2 focus:ring-green-500 transition-colors
+                              ${plate.status === 'APPROVED' ? 'bg-green-100 text-green-600 cursor-not-allowed opacity-60' : 'bg-green-600 text-white hover:bg-green-700'}`}
+                            title="Approve"
+                            disabled={plate.status === 'APPROVED'}
+                          >
+                            <svg className="h-4 w-4 mr-1" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                            Approve
+                            {plate.status === 'APPROVED' && <span className="ml-1">✓</span>}
+                          </button>
+                          <button
+                            onClick={() => handleUpdateStatus(plate.id, 'REJECTED')}
+                            className={`inline-flex items-center px-3 py-1 text-xs font-semibold rounded focus:outline-none focus:ring-2 focus:ring-red-500 transition-colors
+                              ${plate.status === 'REJECTED' ? 'bg-red-100 text-red-600 cursor-not-allowed opacity-60' : 'bg-red-600 text-white hover:bg-red-700'}`}
+                            title="Reject"
+                            disabled={plate.status === 'REJECTED'}
+                          >
+                            <svg className="h-4 w-4 mr-1" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                            Reject
+                            {plate.status === 'REJECTED' && <span className="ml-1">✓</span>}
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+} 
