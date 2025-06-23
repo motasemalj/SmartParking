@@ -3,10 +3,10 @@
 import { useEffect, useState } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
-import axios from 'axios';
 import SecurityNav from '../components/SecurityNav';
 import { format } from 'date-fns';
 import { ArrowDownTrayIcon } from '@heroicons/react/24/outline';
+import { apiClient } from '@/lib/api-client';
 
 interface AccessLog {
   id: string;
@@ -43,20 +43,16 @@ export default function AccessHistoryPage() {
   }, [status, router, dateRange]);
 
   useEffect(() => {
-    if (status === 'authenticated' && session?.accessToken) {
+    if (status === 'authenticated') {
       const fetchLogsPolling = async () => {
         try {
-          const response = await axios.get(
-            `${process.env.NEXT_PUBLIC_API_URL}/api/security/history`,
-            {
-              headers: { Authorization: `Bearer ${session.accessToken}` },
-              params: {
-                startDate: dateRange.start,
-                endDate: dateRange.end,
-              },
-            }
-          );
-          setLogs(response.data);
+          const response = await apiClient.get('/api/security/history', {
+            params: {
+              startDate: dateRange.start,
+              endDate: dateRange.end,
+            },
+          });
+          setLogs(response);
         } catch (err: any) {
           setError(err.response?.data?.message || 'Failed to fetch access logs');
         } finally {
@@ -67,26 +63,22 @@ export default function AccessHistoryPage() {
       const interval = setInterval(fetchLogsPolling, 5000);
       return () => clearInterval(interval);
     }
-  }, [status, session, dateRange]);
+  }, [status, dateRange]);
 
   const fetchLogs = async () => {
     try {
       setLoading(true);
       setError(null);
 
-      const response = await axios.get(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/security/history`,
-        {
-          headers: { Authorization: `Bearer ${session?.accessToken}` },
-          params: {
-            startDate: dateRange.start,
-            endDate: dateRange.end,
-          },
-        }
-      );
-      setLogs(response.data);
+      const response = await apiClient.get('/api/security/history', {
+        params: {
+          startDate: dateRange.start,
+          endDate: dateRange.end,
+        },
+      });
+      setLogs(response);
     } catch (err: any) {
-      console.error('Error fetching logs:', err);
+      console.error('Error fetching logs:', err.response?.data || err.message);
       setError(err.response?.data?.message || 'Failed to fetch access logs');
     } finally {
       setLoading(false);
@@ -95,31 +87,26 @@ export default function AccessHistoryPage() {
 
   const handleDownloadReport = async () => {
     try {
-      const response = await axios.get(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/security/report`,
-        {
-          headers: { Authorization: `Bearer ${session?.accessToken}` },
-          params: {
-            startDate: dateRange.start,
-            endDate: dateRange.end,
-          },
-          responseType: 'blob',
-        }
-      );
+      const response = await apiClient.rawRequest({
+        url: '/api/security/report',
+        method: 'GET',
+        params: {
+          startDate: dateRange.start,
+          endDate: dateRange.end,
+        },
+        responseType: 'blob',
+      });
 
       const url = window.URL.createObjectURL(new Blob([response.data]));
       const link = document.createElement('a');
       link.href = url;
-      link.setAttribute(
-        'download',
-        `access-report-${dateRange.start}-to-${dateRange.end}.pdf`
-      );
+      link.download = `access-history-${dateRange.start}-to-${dateRange.end}.pdf`;
       document.body.appendChild(link);
       link.click();
-      link.remove();
-    } catch (err) {
-      console.error('Error downloading report:', err);
-      setError('Failed to download report');
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Error downloading report:', error);
     }
   };
 
@@ -153,7 +140,7 @@ export default function AccessHistoryPage() {
                   id="startDate"
                   value={dateRange.start}
                   onChange={(e) => setDateRange({ ...dateRange, start: e.target.value })}
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm text-gray-900 bg-white"
                 />
               </div>
               <div>
@@ -165,7 +152,7 @@ export default function AccessHistoryPage() {
                   id="endDate"
                   value={dateRange.end}
                   onChange={(e) => setDateRange({ ...dateRange, end: e.target.value })}
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm text-gray-900 bg-white"
                 />
               </div>
             </div>

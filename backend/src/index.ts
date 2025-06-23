@@ -9,20 +9,50 @@ import authRoutes from './routes/auth';
 import platesRoutes from './routes/plates';
 import securityRoutes from './routes/security';
 import { startExpiredAccessCheck } from './tasks/expiredAccess';
+import { createClient } from 'redis';
 
 // Load environment variables
 dotenv.config();
+
+// Validate required environment variables
+const requiredEnvVars = ['DATABASE_URL', 'JWT_SECRET'];
+for (const envVar of requiredEnvVars) {
+  if (!process.env[envVar]) {
+    console.error(`Missing required environment variable: ${envVar}`);
+    process.exit(1);
+  }
+}
 
 // Initialize Express app
 const app = express();
 const port = process.env.PORT || 5002;
 
-// Initialize Prisma client
-export const prisma = new PrismaClient();
+// Initialize Prisma client with optimized configuration
+export const prisma = new PrismaClient({
+  log: process.env.NODE_ENV === 'development' ? ['query', 'info', 'warn', 'error'] : ['error'],
+});
+
+// Initialize Redis client
+export const redisClient = createClient({
+  url: process.env.REDIS_URL
+});
+
+redisClient.on('error', (err) => console.error('Redis Client Error', err));
+
+(async () => {
+  try {
+    await redisClient.connect();
+    if (process.env.NODE_ENV !== 'production') {
+      console.log('Connected to Redis');
+    }
+  } catch (err) {
+    console.error('Failed to connect to Redis:', err);
+  }
+})();
 
 // Configure logger
 const logger = winston.createLogger({
-  level: 'info',
+  level: process.env.NODE_ENV === 'production' ? 'warn' : 'info',
   format: winston.format.combine(
     winston.format.timestamp(),
     winston.format.json()
@@ -51,17 +81,19 @@ const corsOptions = {
 
 // Middleware
 app.use(cors(corsOptions));
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Serve uploaded files
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
-// Request logging middleware
-app.use((req: Request, res: Response, next: NextFunction) => {
-  logger.info(`${req.method} ${req.url}`);
-  next();
-});
+// Request logging middleware (only in development)
+if (process.env.NODE_ENV !== 'production') {
+  app.use((req: Request, res: Response, next: NextFunction) => {
+    logger.info(`${req.method} ${req.url}`);
+    next();
+  });
+}
 
 // API Routes
 app.use('/api', routes);
@@ -71,7 +103,7 @@ app.use('/api/security', securityRoutes);
 
 // Health check endpoint
 app.get('/health', (req: Request, res: Response) => {
-  res.json({ status: 'ok' });
+  res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
 // Error handling middleware
@@ -109,5 +141,13 @@ startServer();
 process.on('SIGTERM', async () => {
   logger.info('SIGTERM received. Shutting down gracefully...');
   await prisma.$disconnect();
+  await redisClient.quit();
+  process.exit(0);
+});
+
+process.on('SIGINT', async () => {
+  logger.info('SIGINT received. Shutting down gracefully...');
+  await prisma.$disconnect();
+  await redisClient.quit();
   process.exit(0);
 }); 

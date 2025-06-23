@@ -10,7 +10,7 @@ export default function SecurityNav() {
 
   const navigation = [
     {
-      name: 'Plate Requests',
+      name: 'Dashboard',
       href: '/security/dashboard',
       icon: ShieldCheckIcon,
       current: pathname === '/security/dashboard',
@@ -20,12 +20,6 @@ export default function SecurityNav() {
       href: '/security/history',
       icon: ClockIcon,
       current: pathname === '/security/history',
-    },
-    {
-      name: 'Temporary Access',
-      href: '/security/temporary',
-      icon: UserPlusIcon,
-      current: pathname === '/security/temporary',
     },
   ];
 

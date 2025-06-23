@@ -1,6 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -8,6 +5,152 @@ generator client {
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+}
+
+model User {
+  id              String            @id @default(uuid())
+  name            String
+  phoneNumber     String            @unique
+  homeNumber      String
+  userType        UserType
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  activities      Activity[]
+  entries         Entry[]
+  notifications   Notification[]
+  plates          Plate[]
+  temporaryAccess TemporaryAccess[]
+
+  @@index([phoneNumber])
+  @@index([userType])
+  @@index([createdAt])
+}
+
+model Plate {
+  id           String      @id @default(uuid())
+  plateCode    String
+  plateNumber  String
+  country      String
+  type         PlateType
+  status       PlateStatus @default(PENDING)
+  expiresAt    DateTime?
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+  userId       String
+  approvedById String?
+  emirate      String?
+  activities   Activity[]
+  documents    Document[]
+  entries      Entry[]
+  approvedBy   Security?   @relation(fields: [approvedById], references: [id])
+  user         User        @relation(fields: [userId], references: [id])
+
+  @@unique([plateCode, plateNumber, country, type])
+  @@index([userId])
+  @@index([status])
+  @@index([type])
+  @@index([plateCode, plateNumber])
+  @@index([expiresAt])
+  @@index([createdAt])
+  @@index([status, type, expiresAt])
+}
+
+model Document {
+  id        String   @id @default(uuid())
+  type      String
+  url       String
+  plateId   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  plate     Plate    @relation(fields: [plateId], references: [id])
+
+  @@index([plateId])
+  @@index([type])
+}
+
+model Security {
+  id             String   @id @default(uuid())
+  name           String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  approvedPlates Plate[]
+
+  @@index([name])
+}
+
+model Entry {
+  id        String   @id @default(uuid())
+  plateId   String
+  userId    String
+  type      String
+  timestamp DateTime @default(now())
+  plate     Plate    @relation(fields: [plateId], references: [id])
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@index([plateId])
+  @@index([userId])
+  @@index([timestamp])
+  @@index([type])
+  @@index([userId, timestamp])
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  message   String
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([read])
+  @@index([createdAt])
+  @@index([userId, read])
+}
+
+model Activity {
+  id          String   @id @default(uuid())
+  type        String
+  description String
+  timestamp   DateTime @default(now())
+  userId      String
+  plateId     String
+  plate       Plate    @relation(fields: [plateId], references: [id])
+  user        User     @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([plateId])
+  @@index([timestamp])
+  @@index([type])
+  @@index([userId, timestamp])
+}
+
+model SystemConfig {
+  id                  String   @id @default(uuid())
+  guestAccessDuration Int      @default(12)
+  maxPersonalPlates   Int      @default(2)
+  updatedAt           DateTime @updatedAt
+}
+
+model TemporaryAccess {
+  id          String   @id @default(uuid())
+  purpose     String
+  status      String   @default("ACTIVE")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  createdById String
+  country     String
+  emirate     String?
+  expiresAt   DateTime
+  plateCode   String
+  plateNumber String
+  createdBy   User     @relation(fields: [createdById], references: [id])
+
+  @@index([plateCode, plateNumber])
+  @@index([status])
+  @@index([expiresAt])
+  @@index([createdById])
+  @@index([status, expiresAt])
 }
 
 enum UserType {
@@ -25,107 +168,5 @@ enum PlateStatus {
   PENDING
   APPROVED
   REJECTED
+  EXPIRED
 }
-
-model User {
-  id            String    @id @default(uuid())
-  name          String
-  phoneNumber   String    @unique
-  homeNumber    String
-  userType      UserType
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  plates        Plate[]
-  notifications Notification[]
-  entries       Entry[]
-  activities    Activity[]
-  temporaryAccess TemporaryAccess[]
-}
-
-model Plate {
-  id            String      @id @default(uuid())
-  plateCode     String
-  plateNumber   String
-  country       String
-  type          PlateType
-  status        PlateStatus @default(PENDING)
-  expiresAt     DateTime?
-  createdAt     DateTime    @default(now())
-  updatedAt     DateTime    @updatedAt
-  userId        String
-  user          User        @relation(fields: [userId], references: [id])
-  entries       Entry[]
-  documents     Document[]
-  activities    Activity[]
-  approvedBy    Security?   @relation(fields: [approvedById], references: [id])
-  approvedById  String?
-}
-
-model Document {
-  id            String    @id @default(uuid())
-  type          String    // e.g., "MULKEYA"
-  url           String
-  plateId       String
-  plate         Plate     @relation(fields: [plateId], references: [id])
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-}
-
-model Security {
-  id            String    @id @default(uuid())
-  name          String
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  approvedPlates Plate[]
-}
-
-model Entry {
-  id            String    @id @default(uuid())
-  plateId       String
-  plate         Plate     @relation(fields: [plateId], references: [id])
-  userId        String
-  user          User      @relation(fields: [userId], references: [id])
-  type          String    // "ENTRY" or "EXIT"
-  timestamp     DateTime  @default(now())
-}
-
-model Notification {
-  id            String    @id @default(uuid())
-  userId        String
-  user          User      @relation(fields: [userId], references: [id])
-  message       String
-  read          Boolean   @default(false)
-  createdAt     DateTime  @default(now())
-}
-
-model Activity {
-  id            String    @id @default(uuid())
-  type          String    // e.g., "PLATE_APPROVED", "PLATE_REJECTED", "ENTRY", "EXIT"
-  description   String
-  timestamp     DateTime  @default(now())
-  userId        String
-  user          User      @relation(fields: [userId], references: [id])
-  plateId       String
-  plate         Plate     @relation(fields: [plateId], references: [id])
-}
-
-model SystemConfig {
-  id                    String    @id @default(uuid())
-  guestAccessDuration   Int       @default(12) // in hours
-  maxPersonalPlates     Int       @default(2)
-  updatedAt             DateTime  @updatedAt
-}
-
-model TemporaryAccess {
-  id            String    @id @default(uuid())
-  visitorName   String
-  phoneNumber   String
-  purpose       String
-  startTime     DateTime  @default(now())
-  endTime       DateTime
-  status        String    @default("ACTIVE") // ACTIVE or EXPIRED
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  createdById   String
-  createdBy     User      @relation(fields: [createdById], references: [id])
-} 

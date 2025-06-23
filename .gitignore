@@ -38,6 +38,9 @@ Thumbs.db
 /build
 /dist
 
+# Uploads
+backend/uploads/
+
 # Misc
 *.log
 *.pid

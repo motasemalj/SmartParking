@@ -5,6 +5,7 @@ import { useForm } from 'react-hook-form';
 import { signIn, useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import axios from 'axios';
+import CountrySelector, { Country, countries } from './CountrySelector';
 
 type FormData = {
   phoneNumber: string;
@@ -14,6 +15,9 @@ type FormData = {
 export default function LoginPage() {
   const [step, setStep] = useState<'phone' | 'otp'>('phone');
   const [phoneNumber, setPhoneNumber] = useState('');
+  const [selectedCountry, setSelectedCountry] = useState<Country>(
+    countries.find(c => c.code === 'AE') || countries[0]
+  );
   const [error, setError] = useState('');
   const router = useRouter();
   const { data: session, status } = useSession();
@@ -21,7 +25,9 @@ export default function LoginPage() {
   const {
     register,
     handleSubmit,
-    formState: { errors, isSubmitting }
+    formState: { errors, isSubmitting },
+    reset,
+    setValue
   } = useForm<FormData>();
 
   useEffect(() => {
@@ -36,21 +42,56 @@ export default function LoginPage() {
     }
   }, [status, session, router]);
 
+  const formatPhoneNumber = (phone: string, dialCode: string) => {
+    // Remove any non-digit characters from phone
+    const cleanPhone = phone.replace(/\D/g, '');
+    
+    // If phone already starts with the dial code (without +), don't duplicate
+    if (cleanPhone.startsWith(dialCode.substring(1))) {
+      return `${dialCode}${cleanPhone.substring(dialCode.length - 1)}`;
+    }
+    
+    return `${dialCode}${cleanPhone}`;
+  };
+
   const sendOTP = async (phone: string) => {
     try {
+      const fullPhoneNumber = formatPhoneNumber(phone, selectedCountry.dialCode);
+      
       await axios.post(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/otp/send`, {
-        phoneNumber: phone
+        phoneNumber: fullPhoneNumber
       });
-      setPhoneNumber(phone);
+      setPhoneNumber(fullPhoneNumber);
       setStep('otp');
       setError('');
-    } catch (error: any) {
-      if (error.response && error.response.status === 404) {
+      reset({ otp: '' });
+    } catch (error: unknown) {
+      if (error && typeof error === 'object' && 'response' in error && error.response && typeof error.response === 'object' && 'status' in error.response && error.response.status === 404) {
         setError('This phone number is not in the system. Please contact or call the security office.');
       } else {
         setError('Failed to send OTP. Please try again.');
       }
     }
+  };
+
+  const validatePhoneNumber = (value: string) => {
+    if (!value) {
+      return 'Phone number is required';
+    }
+    
+    const cleanPhone = value.replace(/\D/g, '');
+    
+    // Limit to maximum 9 digits
+    if (cleanPhone.length > 9) {
+      return 'Phone number cannot exceed 9 digits';
+    }
+    
+    // Minimum validation
+    if (cleanPhone.length < 7) {
+      return 'Phone number must be at least 7 digits';
+    }
+    
+    return true;
   };
 
   const onSubmit = async (data: FormData) => {
@@ -73,11 +114,17 @@ export default function LoginPage() {
     }
   };
 
+  const handleCountryChange = (country: Country) => {
+    setSelectedCountry(country);
+    // Clear any existing phone number when country changes
+    setValue('phoneNumber', '');
+  };
+
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full space-y-8">
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 py-8 px-4 sm:py-12 sm:px-6 lg:px-8">
+      <div className="max-w-md w-full space-y-6 sm:space-y-8">
         <div>
-          <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
+          <h2 className="mt-6 text-center text-2xl sm:text-3xl font-extrabold text-gray-900">
             {step === 'phone' ? 'Enter your phone number' : 'Enter OTP'}
           </h2>
           <p className="mt-2 text-center text-sm text-gray-600">
@@ -87,25 +134,36 @@ export default function LoginPage() {
           </p>
         </div>
 
-        <form className="mt-8 space-y-6" onSubmit={handleSubmit(onSubmit)}>
+        <form className="mt-6 sm:mt-8 space-y-4 sm:space-y-6" onSubmit={handleSubmit(onSubmit)}>
           <div className="rounded-md shadow-sm -space-y-px">
             {step === 'phone' ? (
               <div>
                 <label htmlFor="phoneNumber" className="sr-only">
                   Phone Number
                 </label>
-                <input
-                  {...register('phoneNumber', {
-                    required: 'Phone number is required',
-                    pattern: {
-                      value: /^[0-9]{10}$/,
-                      message: 'Please enter a valid 10-digit phone number'
-                    }
-                  })}
-                  type="tel"
-                  className="appearance-none rounded-md relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
-                  placeholder="Phone Number"
-                />
+                <div className="flex">
+                  <CountrySelector
+                    selectedCountry={selectedCountry}
+                    onSelectCountry={handleCountryChange}
+                    className="w-24 sm:w-28 flex-shrink-0"
+                  />
+                  <input
+                    {...register('phoneNumber', {
+                      required: 'Phone number is required',
+                      validate: validatePhoneNumber
+                    })}
+                    type="tel"
+                    maxLength={9}
+                    className="flex-1 appearance-none rounded-r-md relative block w-full px-4 py-3 sm:py-2 border border-gray-300 border-l-0 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
+                    placeholder="Phone Number"
+                    autoComplete="tel"
+                    onInput={(e) => {
+                      // Only allow digits
+                      const target = e.target as HTMLInputElement;
+                      target.value = target.value.replace(/\D/g, '');
+                    }}
+                  />
+                </div>
                 {errors.phoneNumber && (
                   <p className="mt-2 text-sm text-red-600">
                     {errors.phoneNumber.message}
@@ -126,8 +184,9 @@ export default function LoginPage() {
                     }
                   })}
                   type="text"
-                  className="appearance-none rounded-md relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
-                  placeholder="Enter OTP"
+                  className="appearance-none rounded-md relative block w-full px-4 py-3 sm:py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
+                  placeholder="Enter 6-digit OTP"
+                  autoComplete="one-time-code"
                 />
                 {errors.otp && (
                   <p className="mt-2 text-sm text-red-600">
@@ -146,7 +205,7 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={isSubmitting}
-              className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
+              className="group relative w-full flex justify-center py-3 sm:py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
             >
               {isSubmitting ? 'Please wait...' : step === 'phone' ? 'Send OTP' : 'Verify OTP'}
             </button>
@@ -156,7 +215,11 @@ export default function LoginPage() {
             <div className="text-sm text-center">
               <button
                 type="button"
-                onClick={() => setStep('phone')}
+                onClick={() => {
+                  setStep('phone');
+                  reset();
+                  setError('');
+                }}
                 className="font-medium text-indigo-600 hover:text-indigo-500"
               >
                 Change phone number

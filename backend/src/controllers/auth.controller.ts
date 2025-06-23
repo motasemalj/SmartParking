@@ -2,9 +2,7 @@ import { Request, Response } from 'express';
 import { prisma } from '../index';
 import jwt from 'jsonwebtoken';
 import { AuthResponse, OTPResponse } from '../types';
-
-// In-memory storage for OTP (replace with Redis in production)
-const otpStore: { [key: string]: { otp: string; expiresAt: number } } = {};
+import { redisClient } from '../index';
 
 export const sendOTP = async (req: Request, res: Response): Promise<Response<OTPResponse>> => {
   try {
@@ -29,11 +27,8 @@ export const sendOTP = async (req: Request, res: Response): Promise<Response<OTP
     // Generate 6-digit OTP
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
     
-    // Store OTP in memory with 5-minute expiration
-    otpStore[phoneNumber] = {
-      otp,
-      expiresAt: Date.now() + 5 * 60 * 1000 // 5 minutes
-    };
+    // Store OTP in Redis with 5-minute expiration
+    await redisClient.setEx(`otp:${phoneNumber}`, 300, otp);
 
     // Log OTP for development (remove in production)
     console.log(`OTP for ${phoneNumber}: ${otp}`);
@@ -61,10 +56,10 @@ export const verifyOTP = async (req: Request, res: Response): Promise<Response<A
       });
     }
 
-    // Get stored OTP
-    const storedOTP = otpStore[phoneNumber];
+    // Get stored OTP from Redis
+    const storedOTP = await redisClient.get(`otp:${phoneNumber}`);
 
-    if (!storedOTP || storedOTP.otp !== otp || Date.now() > storedOTP.expiresAt) {
+    if (!storedOTP || storedOTP !== otp) {
       return res.status(400).json({
         error: 'Invalid or expired OTP'
       });
@@ -79,8 +74,8 @@ export const verifyOTP = async (req: Request, res: Response): Promise<Response<A
       return res.status(404).json({ error: 'User not found' });
     }
 
-    // Generate JWT token
-    const token = jwt.sign(
+    // Generate access token (short-lived)
+    const accessToken = jwt.sign(
       {
         id: user.id,
         userType: user.userType,
@@ -88,14 +83,31 @@ export const verifyOTP = async (req: Request, res: Response): Promise<Response<A
         phoneNumber: user.phoneNumber
       },
       process.env.JWT_SECRET || 'dev-secret-key',
-      { expiresIn: '7d' }
+      { expiresIn: '1h' } // 1 hour expiration
     );
 
-    // Delete OTP from store
-    delete otpStore[phoneNumber];
+    // Generate refresh token (long-lived)
+    const refreshToken = jwt.sign(
+      {
+        id: user.id,
+        userType: user.userType,
+        name: user.name,
+        phoneNumber: user.phoneNumber,
+        type: 'refresh'
+      },
+      process.env.JWT_SECRET || 'dev-secret-key',
+      { expiresIn: '7d' } // 7 days expiration
+    );
+
+    // Store refresh token in Redis for blacklisting capability
+    await redisClient.setEx(`refresh_token:${user.id}`, 7 * 24 * 60 * 60, refreshToken);
+
+    // Delete OTP from Redis
+    await redisClient.del(`otp:${phoneNumber}`);
 
     return res.json({
-      token,
+      accessToken,
+      refreshToken,
       user: {
         id: user.id,
         name: user.name,
@@ -112,10 +124,108 @@ export const verifyOTP = async (req: Request, res: Response): Promise<Response<A
   }
 };
 
+export const refreshToken = async (req: Request, res: Response): Promise<Response<AuthResponse>> => {
+  try {
+    const { refreshToken } = req.body;
+
+    if (!refreshToken) {
+      return res.status(400).json({
+        error: 'Refresh token is required'
+      });
+    }
+
+    try {
+      // Verify refresh token
+      const decoded = jwt.verify(refreshToken, process.env.JWT_SECRET || 'dev-secret-key') as any;
+      
+      if (decoded.type !== 'refresh') {
+        return res.status(401).json({
+          error: 'Invalid token type'
+        });
+      }
+
+      // Check if refresh token is blacklisted
+      const storedRefreshToken = await redisClient.get(`refresh_token:${decoded.id}`);
+      if (!storedRefreshToken || storedRefreshToken !== refreshToken) {
+        return res.status(401).json({
+          error: 'Invalid refresh token'
+        });
+      }
+
+      // Find user
+      const user = await prisma.user.findUnique({
+        where: { id: decoded.id }
+      });
+
+      if (!user) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+
+      // Generate new access token
+      const newAccessToken = jwt.sign(
+        {
+          id: user.id,
+          userType: user.userType,
+          name: user.name,
+          phoneNumber: user.phoneNumber
+        },
+        process.env.JWT_SECRET || 'dev-secret-key',
+        { expiresIn: '1h' }
+      );
+
+      return res.json({
+        accessToken: newAccessToken,
+        refreshToken, // Return the same refresh token
+        user: {
+          id: user.id,
+          name: user.name,
+          phoneNumber: user.phoneNumber,
+          homeNumber: user.homeNumber,
+          userType: user.userType
+        }
+      });
+    } catch (jwtError) {
+      if (jwtError instanceof jwt.TokenExpiredError) {
+        return res.status(401).json({
+          error: 'Refresh token expired'
+        });
+      }
+      return res.status(401).json({
+        error: 'Invalid refresh token'
+      });
+    }
+  } catch (error) {
+    console.error('Error refreshing token:', error);
+    return res.status(500).json({
+      error: 'Failed to refresh token'
+    });
+  }
+};
+
+export const logout = async (req: Request, res: Response): Promise<Response> => {
+  try {
+    const userId = req.user?.id;
+
+    if (userId) {
+      // Blacklist the refresh token
+      await redisClient.del(`refresh_token:${userId}`);
+    }
+
+    return res.json({
+      message: 'Logged out successfully'
+    });
+  } catch (error) {
+    console.error('Error during logout:', error);
+    return res.status(500).json({
+      error: 'Failed to logout'
+    });
+  }
+};
+
 export const updateUserProfile = async (req: Request, res: Response) => {
   try {
     const { name, homeNumber, userType } = req.body;
-    const userId = req.user?.userId;
+    const userId = req.user?.id;
 
     if (!userId) {
       return res.status(401).json({ error: 'Unauthorized' });
@@ -139,7 +249,7 @@ export const updateUserProfile = async (req: Request, res: Response) => {
 
 export const getProfile = async (req: Request, res: Response) => {
   try {
-    const userId = req.user?.userId;
+    const userId = req.user?.id;
 
     if (!userId) {
       return res.status(401).json({ error: 'Unauthorized' });

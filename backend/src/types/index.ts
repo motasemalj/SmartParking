@@ -20,6 +20,7 @@ export interface PlateCreateInput {
   plateCode: string;
   plateNumber: string;
   country: string;
+  emirate?: string;
   type: PlateType;
   userId: string;
 }
@@ -52,7 +53,8 @@ export interface OTPResponse {
 }
 
 export interface AuthResponse {
-  token: string;
+  accessToken: string;
+  refreshToken: string;
   user: {
     id: string;
     name: string;

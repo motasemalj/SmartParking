@@ -11,6 +11,12 @@ export default withAuth(
       return NextResponse.redirect(new URL('/auth/login', req.url));
     }
 
+    // If token has an error or no refresh token, redirect to login
+    if (token.error === 'RefreshAccessTokenError' || !token.refreshToken) {
+      console.log('Token has error or no refresh token, redirecting to login');
+      return NextResponse.redirect(new URL('/auth/login', req.url));
+    }
+
     // Handle admin routes
     if (path.startsWith('/admin')) {
       if (token.userType !== 'ADMIN') {
@@ -39,7 +45,9 @@ export default withAuth(
   },
   {
     callbacks: {
-      authorized: ({ token }) => !!token,
+      authorized: ({ token }) => {
+        return !!token && token.error !== 'RefreshAccessTokenError' && !!token.refreshToken;
+      },
     },
   }
 );

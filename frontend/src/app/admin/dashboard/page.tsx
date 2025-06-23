@@ -3,8 +3,8 @@
 import { useEffect, useState } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
-import axios from 'axios';
 import AdminNav from '../components/AdminNav';
+import { apiClient } from '@/lib/api-client';
 import {
   UsersIcon,
   DocumentCheckIcon,
@@ -52,16 +52,15 @@ export default function AdminDashboardPage() {
 
   useEffect(() => {
     if (status === 'unauthenticated') {
-      router.push('/login');
-    } else if (status === 'authenticated' && session?.accessToken) {
+      router.push('/auth/login');
+      return;
+    }
+
+    if (status === 'authenticated') {
       const fetchStatsPolling = async () => {
         try {
-          const response = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/api/admin/stats`, {
-            headers: {
-              Authorization: `Bearer ${session.accessToken}`,
-            },
-          });
-          setStats(response.data);
+          const response = await apiClient.get('/api/admin/stats');
+          setStats(response);
           setLoading(false);
         } catch (err: any) {
           console.error('Error fetching stats:', err.response?.data || err.message);
@@ -77,29 +76,20 @@ export default function AdminDashboardPage() {
       const interval = setInterval(fetchStatsPolling, 5000);
       return () => clearInterval(interval);
     }
-  }, [status, session, router]);
+  }, [status, router]);
 
   useEffect(() => {
-    if (session?.accessToken) {
+    if (status === 'authenticated') {
       fetchUsers();
     }
-  }, [session]);
+  }, [status]);
 
   const fetchUsers = async () => {
     try {
-      if (!session?.accessToken) {
-        console.error('No access token found in session');
-        return;
-      }
-
-      console.log('Fetching users with token:', session.accessToken);
-      const response = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/api/admin/users`, {
-        headers: {
-          Authorization: `Bearer ${session.accessToken}`,
-        },
-      });
-      console.log('Users response:', response.data);
-      setUsers(response.data);
+      console.log('Fetching users...');
+      const response = await apiClient.get('/api/admin/users');
+      console.log('Users response:', response);
+      setUsers(response);
     } catch (err: any) {
       console.error('Error fetching users:', err.response?.data || err.message);
     }
@@ -107,20 +97,9 @@ export default function AdminDashboardPage() {
 
   const handleUpdateUserType = async (userId: string, newType: User['userType']) => {
     try {
-      if (!session?.accessToken) {
-        console.error('No access token found in session');
-        return;
-      }
-
-      console.log('Updating user type with token:', session.accessToken);
-      const response = await axios.patch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/admin/users/${userId}`,
-        { userType: newType },
-        {
-          headers: { Authorization: `Bearer ${session.accessToken}` },
-        }
-      );
-      console.log('Update response:', response.data);
+      console.log('Updating user type...');
+      const response = await apiClient.patch(`/api/admin/users/${userId}`, { userType: newType });
+      console.log('Update response:', response);
 
       setUsers((prevUsers) =>
         prevUsers.map((user) =>
@@ -309,28 +288,29 @@ export default function AdminDashboardPage() {
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                             <div className="flex items-center space-x-2">
-                              {/* Action icons for other types */}
-                              {['RESIDENT', 'SECURITY', 'ADMIN'].filter(type => type !== user.userType).map(type => (
+                              {user.userType !== 'ADMIN' && (
                                 <button
-                                  key={type}
-                                  title={`Set as ${type.charAt(0) + type.slice(1).toLowerCase()}`}
-                                  onClick={() => handleUpdateUserType(user.id, type as User['userType'])}
+                                  onClick={() => handleUpdateUserType(user.id, user.userType === 'RESIDENT' ? 'SECURITY' : 'RESIDENT')}
                                   className="flex items-center space-x-1 p-1 rounded-full hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                  title={`Set as ${user.userType === 'RESIDENT' ? 'Security' : 'Resident'}`}
                                 >
-                                  {type === 'RESIDENT' && <UsersIcon className="h-5 w-5 text-green-500" />}
-                                  {type === 'SECURITY' && <ShieldCheckIcon className="h-5 w-5 text-blue-500" />}
-                                  {type === 'ADMIN' && <StarIcon className="h-5 w-5 text-purple-500" />}
+                                  {user.userType === 'RESIDENT' ? (
+                                    <ShieldCheckIcon className="h-5 w-5 text-blue-500" />
+                                  ) : (
+                                    <UsersIcon className="h-5 w-5 text-green-500" />
+                                  )}
                                   <span className={
-                                    type === 'RESIDENT'
-                                      ? 'text-green-600 font-semibold text-xs'
-                                      : type === 'SECURITY'
+                                    user.userType === 'RESIDENT'
                                       ? 'text-blue-600 font-semibold text-xs'
-                                      : 'text-purple-600 font-semibold text-xs'
+                                      : 'text-green-600 font-semibold text-xs'
                                   }>
-                                    {type.charAt(0) + type.slice(1).toLowerCase()}
+                                    {user.userType === 'RESIDENT' ? 'Security' : 'Resident'}
                                   </span>
                                 </button>
-                              ))}
+                              )}
+                              {user.userType === 'ADMIN' && (
+                                <span className="text-xs text-gray-500 italic">Admin (cannot change)</span>
+                              )}
                             </div>
                           </td>
                         </tr>
