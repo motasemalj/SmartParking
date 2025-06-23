@@ -370,7 +370,9 @@ export default function AddPlatePage() {
                   Plate Number
                 </label>
                 <input
-                  type="text"
+                  type="tel"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
                   {...register('plateNumber')}
                   onChange={(e) => {
                     // Only allow numbers and limit to 5 digits

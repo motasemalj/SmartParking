@@ -410,7 +410,7 @@ export default function DashboardPage() {
                         Expired: {format(new Date(plate.expiresAt), 'MMM dd, yyyy HH:mm')}
                       </div>
                     )}
-                    {plate.approvedBy && (
+                    {plate.status === 'APPROVED' && plate.approvedBy && (
                       <div className="text-xs text-gray-500 mb-3">
                         Approved by: {plate.approvedBy.name}
                       </div>
@@ -561,7 +561,7 @@ export default function DashboardPage() {
                                 Expired: {format(new Date(plate.expiresAt), 'MMM dd, yyyy HH:mm')}
                               </span>
                             )}
-                            {plate.approvedBy && (
+                            {plate.status === 'APPROVED' && plate.approvedBy && (
                               <span className="text-xs text-gray-500 mt-1">
                                 Approved by: {plate.approvedBy.name}
                               </span>

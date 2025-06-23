@@ -28,6 +28,10 @@ interface Plate {
     homeNumber: string;
   };
   createdAt: string;
+  approvedBy?: {
+    id: string;
+    name: string;
+  };
 }
 
 export default function PlatesPage() {
@@ -39,37 +43,44 @@ export default function PlatesPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<Plate['status'] | 'ALL'>('ALL');
   const [updatingPlates, setUpdatingPlates] = useState<Set<string>>(new Set());
+  const [platesCache, setPlatesCache] = useState<{ [key in Plate['status'] | 'ALL']?: Plate[] }>({});
 
-  const fetchPlates = useCallback(async () => {
+  const fetchPlates = useCallback(async (statusOverride?: Plate['status'] | 'ALL') => {
+    const statusToFetch = statusOverride ?? statusFilter;
+    if (platesCache[statusToFetch]) {
+      setPlates(platesCache[statusToFetch]!);
+      setLoading(false);
+      return;
+    }
     try {
       setLoading(true);
       setError(null);
-
-      console.log('Fetching plates...');
-      const response = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/api/admin/plates`, {
+      const response = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/api/admin/plates${statusToFetch !== 'ALL' ? `?status=${statusToFetch}` : ''}`, {
         headers: { Authorization: `Bearer ${session?.accessToken}` }
       });
-      console.log('Plates response:', response);
       setPlates(response.data);
+      setPlatesCache(prev => ({ ...prev, [statusToFetch]: response.data }));
     } catch (error: unknown) {
       const err = error as { response?: { data?: { message?: string } }; message?: string };
-      console.error('Error fetching plates:', err.response?.data || err.message);
       setError(err.response?.data?.message || 'Failed to fetch plates');
     } finally {
       setLoading(false);
     }
-  }, [session?.accessToken]);
+  }, [session?.accessToken, statusFilter, platesCache]);
 
   useEffect(() => {
     if (status === 'unauthenticated') {
       router.push('/auth/login');
       return;
     }
-
     if (status === 'authenticated') {
       fetchPlates();
     }
   }, [session, status, router, fetchPlates]);
+
+  useEffect(() => {
+    fetchPlates(statusFilter);
+  }, [statusFilter]);
 
   const handleUpdateStatus = async (plateId: string, newStatus: Plate['status']) => {
     try {
@@ -259,6 +270,11 @@ export default function PlatesPage() {
                             {plate.status}
                           </span>
                         </div>
+                        {plate.status === 'APPROVED' && plate.approvedBy && (
+                          <div className="text-xs text-gray-500 mt-1">
+                            Approved by: {plate.approvedBy.name}
+                          </div>
+                        )}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm">
                         {plate.documents.length > 0 ? (
