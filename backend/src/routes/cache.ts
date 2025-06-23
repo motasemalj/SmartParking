@@ -8,7 +8,7 @@ const router = Router();
 router.use(authenticateToken);
 
 // Get cache status for all cache types
-router.get('/status', async (req, res) => {
+router.get('/status', async (_req, res) => {
   try {
     const cacheStatus = await cacheUtils.getStatus();
     res.json(cacheStatus);
@@ -19,7 +19,7 @@ router.get('/status', async (req, res) => {
 });
 
 // Get cache status for user cache
-router.get('/status/user', async (req, res) => {
+router.get('/status/user', async (_req, res) => {
   try {
     const userId = req.user?.id;
     if (!userId) {
@@ -51,7 +51,7 @@ router.get('/status/user', async (req, res) => {
 });
 
 // Get cache status for admin cache
-router.get('/status/admin', async (req, res) => {
+router.get('/status/admin', async (_req, res) => {
   try {
     const adminCacheKeys = [
       CACHE_KEYS.ADMIN_STATS(),
@@ -81,7 +81,7 @@ router.get('/status/admin', async (req, res) => {
 });
 
 // Get cache status for security cache
-router.get('/status/security', async (req, res) => {
+router.get('/status/security', async (_req, res) => {
   try {
     const securityCacheKeys = [
       CACHE_KEYS.SECURITY_PLATES(),

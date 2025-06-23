@@ -86,7 +86,7 @@ export const getStats = async (req: Request, res: Response) => {
 };
 
 // Get all users
-export const getUsers = async (req: Request, res: Response) => {
+export const getUsers = async (_req: Request, res: Response) => {
   try {
     const users = await prisma.user.findMany({
       select: {
@@ -110,10 +110,10 @@ export const getUsers = async (req: Request, res: Response) => {
 };
 
 // Update user type
-export const updateUserType = async (req: Request, res: Response) => {
+export const updateUserType = async (_req: Request, res: Response) => {
   try {
-    const { userId } = req.params;
-    const { userType } = req.body;
+    const { userId } = _req.params;
+    const { userType } = _req.body;
 
     // Prevent setting users as ADMIN - admins can only change between RESIDENT and SECURITY
     if (userType === 'ADMIN') {

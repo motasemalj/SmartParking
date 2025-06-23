@@ -44,7 +44,7 @@ export const authenticateToken = async (
       }
 
       req.user = decoded;
-      next();
+      return next();
     } catch (error) {
       if (error instanceof jwt.JsonWebTokenError) {
         return res.status(401).json({ message: 'Invalid token' });
@@ -70,7 +70,7 @@ export const requireAdmin = (
   if (req.user.userType !== 'ADMIN') {
     return res.status(403).json({ message: 'Admin access required' });
   }
-  next();
+  return next();
 };
 
 export const requireSecurity = (
@@ -84,5 +84,5 @@ export const requireSecurity = (
   if (req.user.userType !== 'SECURITY') {
     return res.status(403).json({ message: 'Security access required' });
   }
-  next();
+  return next();
 }; 

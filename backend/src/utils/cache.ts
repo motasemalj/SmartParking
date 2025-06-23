@@ -1,18 +1,7 @@
 import { redisClient } from '../index';
 
 // Cache configuration
-const CACHE_TTL = {
-  PLATES: 300, // 5 minutes
-  HISTORY: 180, // 3 minutes
-  USER_PROFILE: 600, // 10 minutes
-  ADMIN_STATS: 600, // 10 minutes
-  ADMIN_USERS: 300, // 5 minutes
-  ADMIN_PLATES: 300, // 5 minutes
-  ADMIN_REPORTS: 900, // 15 minutes
-  SECURITY_PLATES: 300, // 5 minutes
-  SECURITY_HISTORY: 180, // 3 minutes
-  SECURITY_TEMPORARY_ACCESS: 300, // 5 minutes
-};
+// Removed unused CACHE_TTL
 
 // Cache keys
 export const CACHE_KEYS = {

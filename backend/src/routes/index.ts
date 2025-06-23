@@ -19,22 +19,22 @@ router.get('/auth/profile', authenticateToken, authController.getProfile);
 // Plate routes
 router.post('/plates', authenticateToken, upload.array('documents'), plateController.addPlate);
 router.get('/plates', authenticateToken, plateController.getPlates);
-router.delete('/plates/:plateId', authenticateToken, (req, res, next) => {
-  console.log('DEBUG: DELETE route in index.ts called with plateId:', req.params.plateId);
-  console.log('DEBUG: User:', req.user);
-  plateController.removePlate(req, res);
+router.delete('/plates/:plateId', authenticateToken, (_req, res, _next) => {
+  console.log('DEBUG: DELETE route in index.ts called with plateId:', _req.params.plateId);
+  console.log('DEBUG: User:', _req.user);
+  plateController.removePlate(_req, res);
 });
 router.post('/plates/:plateId/approve', authenticateToken, plateController.approvePlate);
 router.post('/plates/:plateId/reject', authenticateToken, plateController.rejectPlate);
 
 // File proxy endpoint - serves S3 files with authentication
-router.get('/files/:documentId', authenticateToken, async (req, res) => {
+router.get('/files/:documentId', authenticateToken, async (_req, res) => {
   try {
-    console.log('Proxy endpoint called for document:', req.params.documentId);
+    console.log('Proxy endpoint called for document:', _req.params.documentId);
     
-    const { documentId } = req.params;
-    const userId = req.user?.id;
-    const userType = req.user?.userType;
+    const { documentId } = _req.params;
+    const userId = _req.user?.id;
+    const userType = _req.user?.userType;
 
     if (!userId) {
       return res.status(401).json({ error: 'Unauthorized' });

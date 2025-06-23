@@ -1,8 +1,6 @@
 import { Request, Response } from 'express';
 import { prisma } from '../index';
 import { PlateCreateInput } from '../types';
-import path from 'path';
-import fs from 'fs';
 import { uploadFileToS3, extractKeyFromUrl, deleteFileFromS3 } from '../utils/s3';
 import { cacheUtils } from '../utils/cache';
 
@@ -390,7 +388,7 @@ export const rejectPlate = async (req: Request, res: Response) => {
   }
 };
 
-export const checkExpiredPlates = async (req: Request, res: Response) => {
+export const checkExpiredPlates = async (_req: Request, res: Response) => {
   try {
     console.log('Checking for expired guest plates...');
     const result = await prisma.plate.updateMany({

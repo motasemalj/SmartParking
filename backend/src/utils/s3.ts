@@ -1,5 +1,6 @@
 import AWS from 'aws-sdk';
 import { v4 as uuidv4 } from 'uuid';
+import type { v4 as uuidv4Type } from 'uuid';
 import path from 'path';
 
 // Validate required environment variables

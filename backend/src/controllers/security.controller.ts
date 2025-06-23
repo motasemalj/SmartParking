@@ -4,7 +4,7 @@ import PDFDocument from 'pdfkit';
 import { format } from 'date-fns';
 import { cacheUtils } from '../utils/cache';
 
-const getSecurityUsers = async (req: Request, res: Response) => {
+const getSecurityUsers = async (_req: Request, res: Response) => {
   try {
     const users = await prisma.security.findMany({
       select: {

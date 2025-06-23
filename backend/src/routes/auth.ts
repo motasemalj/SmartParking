@@ -7,8 +7,8 @@ const router = express.Router();
 const prisma = new PrismaClient();
 
 // Debug middleware
-router.use((req, res, next) => {
-  console.log('Auth Route:', req.method, req.path, req.body);
+router.use((_req, _res, next) => {
+  console.log('Auth Route:', _req.method, _req.path, _req.body);
   next();
 });
 

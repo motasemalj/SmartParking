@@ -1,4 +1,4 @@
-import { UserType, PlateType, PlateStatus } from '@prisma/client';
+import { UserType, PlateType } from '@prisma/client';
 
 export interface JWTPayload {
   id: string;

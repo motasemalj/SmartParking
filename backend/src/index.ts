@@ -102,12 +102,12 @@ app.use('/api/plates', platesRoutes);
 app.use('/api/security', securityRoutes);
 
 // Health check endpoint
-app.get('/health', (req: Request, res: Response) => {
+app.get('/health', (_req: Request, res: Response) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
 // Error handling middleware
-app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
+app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
   logger.error(err.stack);
   res.status(500).json({
     error: 'Internal Server Error',
