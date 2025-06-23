@@ -72,7 +72,7 @@ if (process.env.NODE_ENV !== 'production') {
 // CORS configuration
 const corsOptions = {
   origin: process.env.NODE_ENV === 'production' 
-    ? process.env.FRONTEND_URL 
+    ? ['https://smart-parking-chi.vercel.app', process.env.FRONTEND_URL].filter((url): url is string => Boolean(url))
     : ['http://localhost:3000', 'http://127.0.0.1:3000'],
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
