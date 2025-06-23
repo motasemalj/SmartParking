@@ -19,7 +19,7 @@ router.get('/status', async (_req, res) => {
 });
 
 // Get cache status for user cache
-router.get('/status/user', async (_req, res) => {
+router.get('/status/user', async (req, res) => {
   try {
     const userId = req.user?.id;
     if (!userId) {
@@ -40,13 +40,13 @@ router.get('/status/user', async (_req, res) => {
       })
     );
 
-    res.json({
+    return res.json({
       userId,
       cacheStatus: userCacheStatus
     });
   } catch (error) {
     console.error('Error getting user cache status:', error);
-    res.status(500).json({ error: 'Failed to get user cache status' });
+    return res.status(500).json({ error: 'Failed to get user cache status' });
   }
 });
 

@@ -348,7 +348,7 @@ const createTemporaryAccess = async (req: Request, res: Response) => {
     }
 
     // Create both temporary access record and plate entry (upsert to avoid duplicates)
-    const [temporaryAccess, plate] = await prisma.$transaction([
+    const [temporaryAccess, _plate] = await prisma.$transaction([
       prisma.temporaryAccess.create({
         data: {
           plateCode,

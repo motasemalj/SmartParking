@@ -165,7 +165,7 @@ export const cacheUtils = {
 };
 
 // Cache middleware for API responses
-export const withCache = (ttl: number) => {
+export const withCache = (_ttl: number) => {
   return async (req: any, res: any, next: any) => {
     const userId = req.user?.id;
     if (!userId) {

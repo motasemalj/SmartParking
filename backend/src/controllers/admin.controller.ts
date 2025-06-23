@@ -37,7 +37,7 @@ interface DailyTotals {
 }
 
 // Get system statistics
-export const getStats = async (req: Request, res: Response) => {
+export const getStats = async (_req: Request, res: Response) => {
   try {
     const [
       totalUsers,
@@ -148,9 +148,9 @@ export const updateUserType = async (_req: Request, res: Response) => {
 };
 
 // Get all plates
-export const getPlates = async (req: Request, res: Response) => {
+export const getPlates = async (_req: Request, res: Response) => {
   try {
-    const { status } = req.query;
+    const { status } = _req.query;
 
     const plates = await prisma.plate.findMany({
       where: {
@@ -189,10 +189,10 @@ export const getPlates = async (req: Request, res: Response) => {
 };
 
 // Update plate status
-export const updatePlateStatus = async (req: Request, res: Response) => {
+export const updatePlateStatus = async (_req: Request, res: Response) => {
   try {
-    const { plateId } = req.params;
-    const { status } = req.body;
+    const { plateId } = _req.params;
+    const { status } = _req.body;
 
     if (!['PENDING', 'APPROVED', 'REJECTED'].includes(status)) {
       return res.status(400).json({ error: 'Invalid status' });
@@ -233,7 +233,7 @@ export const updatePlateStatus = async (req: Request, res: Response) => {
 };
 
 // Get reports data
-export const getReports = async (req: Request, res: Response) => {
+export const getReports = async (_req: Request, res: Response) => {
   try {
     // Get daily entries for the last 30 days instead of 7 to get more data
     const thirtyDaysAgo = new Date();
@@ -458,9 +458,9 @@ export const getReports = async (req: Request, res: Response) => {
 };
 
 // Create new user
-export const createUser = async (req: Request, res: Response) => {
+export const createUser = async (_req: Request, res: Response) => {
   try {
-    const { name, phoneNumber, homeNumber, userType } = req.body;
+    const { name, phoneNumber, homeNumber, userType } = _req.body;
 
     // Validate required fields
     if (!name || !phoneNumber || !homeNumber || !userType) {
@@ -510,9 +510,9 @@ export const createUser = async (req: Request, res: Response) => {
 };
 
 // Delete user
-export const deleteUser = async (req: Request, res: Response) => {
+export const deleteUser = async (_req: Request, res: Response) => {
   try {
-    const { userId } = req.params;
+    const { userId } = _req.params;
 
     // Check if user exists
     const user = await prisma.user.findUnique({

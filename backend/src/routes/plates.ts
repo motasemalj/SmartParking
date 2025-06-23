@@ -1,7 +1,6 @@
 import express from 'express';
 import { authenticateToken } from '../middleware/auth';
 import multer from 'multer';
-import path from 'path';
 import { uploadFileToS3 } from '../utils/s3';
 import { prisma } from '../index';
 import { cacheUtils, CACHE_KEYS, withCache, cacheResponse } from '../utils/cache';
@@ -55,10 +54,10 @@ router.get('/', authenticateToken, withCache(300), async (req, res) => {
     // Cache the response
     await cacheResponse(CACHE_KEYS.USER_PLATES(userId), response, 300);
 
-    res.json(response);
+    return res.json(response);
   } catch (error) {
     console.error('Error fetching plates:', error);
-    res.status(500).json({ error: 'Failed to fetch plates' });
+    return res.status(500).json({ error: 'Failed to fetch plates' });
   }
 });
 
@@ -200,10 +199,10 @@ router.post('/', authenticateToken, upload.single('documents'), async (req, res)
       return res.status(500).json({ error: 'Failed to create plate' });
     }
 
-    res.status(201).json(plate);
+    return res.status(201).json(plate);
   } catch (error) {
     console.error('Error creating plate:', error);
-    res.status(500).json({ error: 'Failed to create plate' });
+    return res.status(500).json({ error: 'Failed to create plate' });
   }
 });
 
@@ -247,7 +246,7 @@ router.get('/history', authenticateToken, withCache(180), async (req, res) => {
             userId,
           },
         },
-      })
+      }),
     ]);
 
     const response = {
@@ -258,23 +257,24 @@ router.get('/history', authenticateToken, withCache(180), async (req, res) => {
         totalCount,
         totalPages: Math.ceil(totalCount / limit),
         hasNextPage: page < Math.ceil(totalCount / limit),
-        hasPrevPage: page > 1
-      }
+        hasPrevPage: page > 1,
+      },
     };
 
     // Cache the response
     await cacheResponse(CACHE_KEYS.USER_HISTORY(userId, page, limit), response, 180);
 
-    res.json(response);
+    return res.json(response);
   } catch (error) {
-    console.error('Error fetching history:', error);
-    res.status(500).json({ error: 'Failed to fetch history' });
+    console.error('Error fetching plate history:', error);
+    return res.status(500).json({ error: 'Failed to fetch plate history' });
   }
 });
 
-// Check and update expired guest plates
-router.post('/check-expired', authenticateToken, async (req, res) => {
+// Check for expired plates
+router.post('/check-expired', authenticateToken, async (_req, res) => {
   try {
+    console.log('Checking for expired guest plates...');
     const result = await prisma.plate.updateMany({
       where: {
         type: 'GUEST',
@@ -288,17 +288,18 @@ router.post('/check-expired', authenticateToken, async (req, res) => {
       }
     });
     
-    res.json({ 
+    console.log(`Updated ${result.count} expired guest plates`);
+    return res.json({ 
       message: `Updated ${result.count} expired guest plates`,
       updatedCount: result.count 
     });
   } catch (error) {
     console.error('Error checking expired plates:', error);
-    res.status(500).json({ error: 'Failed to check expired plates' });
+    return res.status(500).json({ error: 'Failed to check expired plates' });
   }
 });
 
-// Cache status endpoint (for monitoring)
+// Get cache status for user
 router.get('/cache-status', authenticateToken, async (req, res) => {
   try {
     if (!req.user) {
@@ -306,34 +307,27 @@ router.get('/cache-status', authenticateToken, async (req, res) => {
     }
 
     const userId = req.user.id;
-    const platesKey = CACHE_KEYS.USER_PLATES(userId);
-    const historyKey = CACHE_KEYS.USER_HISTORY(userId, 1, 20);
+    const userCacheKeys = [
+      CACHE_KEYS.USER_PLATES(userId),
+      CACHE_KEYS.USER_HISTORY(userId, 1, 20),
+      CACHE_KEYS.USER_PROFILE(userId)
+    ];
 
-    const [platesCached, historyCached] = await Promise.all([
-      cacheUtils.get(platesKey),
-      cacheUtils.get(historyKey)
-    ]);
+    const userCacheStatus = await Promise.all(
+      userCacheKeys.map(async (key) => {
+        const exists = await cacheUtils.exists(key);
+        const ttl = exists ? await cacheUtils.ttl(key) : -1;
+        return { key, exists, ttl };
+      })
+    );
 
-    res.json({
-      cacheStatus: {
-        plates: {
-          cached: !!platesCached,
-          key: platesKey
-        },
-        history: {
-          cached: !!historyCached,
-          key: historyKey
-        }
-      },
-      cacheInfo: {
-        platesTTL: 300, // 5 minutes
-        historyTTL: 180, // 3 minutes
-        description: 'Cache automatically invalidates when plates are modified'
-      }
+    return res.json({
+      userId,
+      cacheStatus: userCacheStatus
     });
   } catch (error) {
-    console.error('Error getting cache status:', error);
-    res.status(500).json({ error: 'Failed to get cache status' });
+    console.error('Error getting user cache status:', error);
+    return res.status(500).json({ error: 'Failed to get user cache status' });
   }
 });
 

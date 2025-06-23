@@ -87,10 +87,10 @@ router.get('/files/:documentId', authenticateToken, async (_req, res) => {
 
     console.log('Sending file response');
     // Send the file
-    res.send(buffer);
+    return res.send(buffer);
   } catch (error) {
     console.error('Error serving file:', error);
-    res.status(500).json({ error: 'Failed to serve file' });
+    return res.status(500).json({ error: 'Failed to serve file' });
   }
 });
 
