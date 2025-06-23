@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react';
 import AdminNav from '../components/AdminNav';
 import CreateUserModal from './components/CreateUserModal';
 import ConfirmDialog from './components/ConfirmDialog';
+import EditUserModal from './components/EditUserModal';
 import { apiClient } from '@/lib/api-client';
 import {
   UsersIcon,
@@ -49,6 +50,8 @@ export default function UsersPage() {
   const [selectedUsers, setSelectedUsers] = useState<Set<string>>(new Set());
   const [selectAll, setSelectAll] = useState(false);
   const [changingUserTypes, setChangingUserTypes] = useState<Set<string>>(new Set());
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editingUser, setEditingUser] = useState<User | null>(null);
 
   const fetchUsers = async () => {
     try {
@@ -483,6 +486,9 @@ export default function UsersPage() {
                           Type
                         </th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Edit
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                           Set As
                         </th>
                       </tr>
@@ -534,6 +540,26 @@ export default function UsersPage() {
                               )}
                             </div>
                           </td>
+                          {/* Edit Button Column */}
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            {user.userType !== 'ADMIN' && (
+                              <button
+                                onClick={() => {
+                                  setEditingUser(user);
+                                  setShowEditModal(true);
+                                }}
+                                className="flex items-center space-x-1 p-1 rounded-full hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                title="Edit User"
+                              >
+                                <svg className="h-5 w-5 text-yellow-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536M9 13h3l8-8a2.828 2.828 0 10-4-4l-8 8v3z" />
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7l-1.5-1.5" />
+                                </svg>
+                                <span className="text-yellow-600 font-semibold text-xs">Edit</span>
+                              </button>
+                            )}
+                          </td>
+                          {/* Set As Column */}
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                             <div className="flex items-center space-x-2">
                               {user.userType !== 'ADMIN' && (
@@ -629,6 +655,24 @@ export default function UsersPage() {
             ? "danger" 
             : "warning"
         }
+        loading={
+          pendingBulkDelete
+            ? deletingUsers.size > 0
+            : pendingUserDelete
+            ? !!pendingUserDelete.userId && deletingUsers.has(pendingUserDelete.userId)
+            : false
+        }
+      />
+
+      {/* Edit User Modal */}
+      <EditUserModal
+        isOpen={showEditModal}
+        onClose={() => {
+          setShowEditModal(false);
+          setEditingUser(null);
+        }}
+        onUserUpdated={fetchUsers}
+        user={editingUser}
       />
     </div>
   );

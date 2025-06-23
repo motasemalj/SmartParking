@@ -618,4 +618,64 @@ export const deleteUser = async (_req: Request, res: Response) => {
     console.error('Error deleting user:', error);
     return res.status(500).json({ error: 'Failed to delete user' });
   }
+};
+
+// Update user (all fields)
+export const updateUser = async (req: Request, res: Response) => {
+  try {
+    const { userId } = req.params;
+    const { name, phoneNumber, homeNumber, userType } = req.body;
+
+    // Validate at least one field is provided
+    if (!name && !phoneNumber && !homeNumber && !userType) {
+      return res.status(400).json({ error: 'No fields provided for update' });
+    }
+
+    // Validate userType if provided
+    if (userType && !['RESIDENT', 'SECURITY'].includes(userType)) {
+      return res.status(400).json({ error: 'Invalid user type. Can only set as RESIDENT or SECURITY' });
+    }
+
+    // Prevent setting users as ADMIN
+    if (userType === 'ADMIN') {
+      return res.status(403).json({ error: 'Admins cannot set other users as admins' });
+    }
+
+    // Validate phone number uniqueness if changed
+    if (phoneNumber) {
+      const existingUser = await prisma.user.findFirst({
+        where: { phoneNumber, NOT: { id: userId } }
+      });
+      if (existingUser) {
+        return res.status(400).json({ error: 'Phone number already registered' });
+      }
+    }
+
+    const updateData: any = {};
+    if (name) updateData.name = name;
+    if (phoneNumber) updateData.phoneNumber = phoneNumber;
+    if (homeNumber) updateData.homeNumber = homeNumber;
+    if (userType) updateData.userType = userType;
+
+    const updatedUser = await prisma.user.update({
+      where: { id: userId },
+      data: updateData,
+      select: {
+        id: true,
+        name: true,
+        phoneNumber: true,
+        homeNumber: true,
+        userType: true,
+        createdAt: true
+      }
+    });
+
+    // Invalidate admin cache since user data changed
+    await cacheUtils.invalidateAdminCache();
+
+    return res.json(updatedUser);
+  } catch (error) {
+    console.error('Error updating user:', error);
+    return res.status(500).json({ error: 'Failed to update user' });
+  }
 }; 

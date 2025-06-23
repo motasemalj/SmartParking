@@ -240,7 +240,7 @@ export default function AddPlatePage() {
           </p>
         </div>
 
-        <DashboardHeader />
+        <DashboardHeader activeTab="plates" onTabChange={() => {}} />
 
         <div className="flex justify-center">
           {/* Form Section */}

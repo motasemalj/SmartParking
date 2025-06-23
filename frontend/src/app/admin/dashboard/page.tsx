@@ -13,6 +13,7 @@ import {
   ShieldCheckIcon,
   StarIcon,
 } from '@heroicons/react/24/outline';
+import useSWR from 'swr';
 
 interface Stats {
   totalUsers: number;
@@ -42,82 +43,58 @@ interface User {
   createdAt: string;
 }
 
+const fetcher = (url: string, token: string) =>
+  apiClient.get(url, { headers: { Authorization: `Bearer ${token}` } });
+
 export default function AdminDashboardPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
-  const [stats, setStats] = useState<Stats | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [users, setUsers] = useState<User[]>([]);
 
-  useEffect(() => {
-    if (status === 'unauthenticated') {
-      router.push('/auth/login');
-      return;
-    }
+  const {
+    data: stats,
+    error: statsError,
+    isLoading: statsLoading,
+    mutate: mutateStats
+  } = useSWR(
+    status === 'authenticated' && session?.accessToken ? ['/api/admin/stats', session.accessToken] : null,
+    ([url, token]) => fetcher(url, token),
+    { refreshInterval: 5000 }
+  );
 
-    if (status === 'authenticated') {
-      const fetchStatsPolling = async () => {
-        try {
-          const response = await apiClient.get<Stats>('/api/admin/stats');
-          setStats(response);
-          setLoading(false);
-        } catch (err: any) {
-          console.error('Error fetching stats:', err.response?.data || err.message);
-          setError(err.response?.data?.message || 'Failed to fetch stats');
-          setLoading(false);
-        }
-      };
+  const {
+    data: users,
+    error: usersError,
+    isLoading: usersLoading,
+    mutate: mutateUsers
+  } = useSWR(
+    status === 'authenticated' && session?.accessToken ? ['/api/admin/users', session.accessToken] : null,
+    ([url, token]) => fetcher(url, token)
+  );
 
-      // Initial fetch
-      fetchStatsPolling();
+  const statsTyped = (Array.isArray(stats) ? undefined : stats) as Stats;
+  const usersTyped = Array.isArray(users) ? users : (users as User[]);
 
-      // Set up polling
-      const interval = setInterval(fetchStatsPolling, 5000);
-      return () => clearInterval(interval);
-    }
-  }, [status, router]);
+  if (status === 'unauthenticated') {
+    router.push('/auth/login');
+    return null;
+  }
 
-  useEffect(() => {
-    if (status === 'authenticated') {
-      fetchUsers();
-    }
-  }, [status]);
+  if (statsLoading || usersLoading) {
+    return <div>Loading...</div>;
+  }
 
-  const fetchUsers = async () => {
-    try {
-      console.log('Fetching users...');
-      const response = await apiClient.get<User[]>('/api/admin/users');
-      console.log('Users response:', response);
-      setUsers(response);
-    } catch (err: any) {
-      console.error('Error fetching users:', err.response?.data || err.message);
-    }
-  };
+  if (statsError || usersError) {
+    return <div>Error: {statsError?.message || usersError?.message || 'Failed to fetch data'}</div>;
+  }
 
   const handleUpdateUserType = async (userId: string, newType: User['userType']) => {
     try {
-      console.log('Updating user type...');
-      const response = await apiClient.patch(`/api/admin/users/${userId}`, { userType: newType });
-      console.log('Update response:', response);
-
-      setUsers((prevUsers) =>
-        prevUsers.map((user) =>
-          user.id === userId ? { ...user, userType: newType } : user
-        )
-      );
+      await apiClient.patch(`/api/admin/users/${userId}`, { userType: newType });
+      mutateUsers();
     } catch (err: any) {
       console.error('Error updating user type:', err.response?.data || err.message);
     }
   };
-
-  if (loading) {
-    return <div>Loading...</div>;
-  }
-
-  if (error) {
-    return <div>Error: {error}</div>;
-  }
 
   return (
     <div className="min-h-screen bg-gray-100">
@@ -134,7 +111,7 @@ export default function AdminDashboardPage() {
             <AdminNav />
           </div>
 
-          {stats && (
+          {statsTyped && (
             <>
               {/* Stats */}
               <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4 mb-8">
@@ -150,7 +127,7 @@ export default function AdminDashboardPage() {
                             Total Users
                           </dt>
                           <dd className="text-lg font-medium text-gray-900">
-                            {stats.userStats.total}
+                            {statsTyped.userStats.total}
                           </dd>
                         </dl>
                       </div>
@@ -170,7 +147,7 @@ export default function AdminDashboardPage() {
                             Pending Plates
                           </dt>
                           <dd className="text-lg font-medium text-gray-900">
-                            {stats.plateStats.pending}
+                            {statsTyped.plateStats.pending}
                           </dd>
                         </dl>
                       </div>
@@ -190,7 +167,7 @@ export default function AdminDashboardPage() {
                             Total Entries
                           </dt>
                           <dd className="text-lg font-medium text-gray-900">
-                            {stats.totalEntries}
+                            {statsTyped.totalEntries}
                           </dd>
                         </dl>
                       </div>
@@ -210,7 +187,7 @@ export default function AdminDashboardPage() {
                             Rejected Plates
                           </dt>
                           <dd className="text-lg font-medium text-gray-900">
-                            {stats.rejectedPlates}
+                            {statsTyped.rejectedPlates}
                           </dd>
                         </dl>
                       </div>
@@ -248,7 +225,7 @@ export default function AdminDashboardPage() {
                       </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
-                      {users.map((user) => (
+                      {usersTyped.map((user: User) => (
                         <tr key={user.id}>
                           <td className="px-6 py-4 whitespace-nowrap">
                             <div className="text-sm font-medium text-gray-900">

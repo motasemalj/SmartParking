@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import axios from 'axios';
+import useSWR from 'swr';
 
 interface Plate {
   id: string;
@@ -18,42 +19,36 @@ interface Plate {
   expiresAt?: string;
 }
 
+interface PlatesResponse {
+  plates: Plate[];
+}
+
+const fetcher = (url: string, token: string) =>
+  fetch(url, { headers: { Authorization: `Bearer ${token}` } }).then(res => res.json());
+
 export default function UserDashboardPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
-  const [plates, setPlates] = useState<Plate[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
 
-  const fetchPlates = useCallback(async () => {
-    try {
-      const response = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/plates`, {
-        headers: {
-          Authorization: `Bearer ${session?.accessToken}`,
-        },
-      });
-      setPlates(response.data);
-      setLoading(false);
-    } catch (error) {
-      setError('Failed to fetch plates');
-      setLoading(false);
-    }
-  }, [session?.accessToken]);
+  const { data, error, isLoading } = useSWR(
+    status === 'authenticated' && session?.accessToken
+      ? [`${process.env.NEXT_PUBLIC_API_URL}/plates`, session.accessToken]
+      : null,
+    ([url, token]) => fetcher(url, token)
+  );
+  const plates = Array.isArray(data) ? data : (data as PlatesResponse)?.plates || [];
 
-  useEffect(() => {
-    if (status === 'unauthenticated') {
-      router.push('/login');
-    } else if (status === 'authenticated') {
-      fetchPlates();
-    }
-  }, [status, router, fetchPlates]);
+  if (status === 'unauthenticated') {
+    router.push('/login');
+    return null;
+  }
 
-  if (loading) {
+  if (isLoading) {
     return <div>Loading...</div>;
   }
 
   if (error) {
-    return <div>Error: {error}</div>;
+    return <div>Error: {error.message || 'Failed to fetch plates'}</div>;
   }
 
   return (
@@ -63,7 +58,7 @@ export default function UserDashboardPage() {
         <p className="text-gray-600">Newest plates appear first</p>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {plates.map((plate, index) => (
+        {plates && plates.map((plate: Plate, index: number) => (
           <div key={plate.id} className="bg-white p-6 rounded-lg shadow relative">
             {index === 0 && plates.length > 1 && (
               <div className="absolute -top-2 -right-2 bg-blue-500 text-white text-xs px-2 py-1 rounded-full">
@@ -108,7 +103,7 @@ export default function UserDashboardPage() {
             </div>
           </div>
         ))}
-        {plates.length === 0 && (
+        {plates && plates.length === 0 && (
           <div className="col-span-full text-center py-12">
             <p className="text-gray-500 text-lg">No plates found</p>
             <p className="text-gray-400">Your new plates will appear here</p>

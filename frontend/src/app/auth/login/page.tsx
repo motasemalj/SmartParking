@@ -191,10 +191,18 @@ export default function LoginPage() {
                       message: 'Please enter the 6-digit OTP'
                     }
                   })}
-                  type="text"
+                  type="tel"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  maxLength={6}
                   className="appearance-none rounded-md relative block w-full px-4 py-3 sm:py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
                   placeholder="Enter 6-digit OTP"
                   autoComplete="one-time-code"
+                  onInput={(e) => {
+                    // Only allow digits for OTP
+                    const target = e.target as HTMLInputElement;
+                    target.value = target.value.replace(/\D/g, '');
+                  }}
                 />
                 {errors.otp && (
                   <p className="mt-2 text-sm text-red-600">

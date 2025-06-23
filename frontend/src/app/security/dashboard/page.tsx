@@ -7,6 +7,7 @@ import SecurityNav from '../components/SecurityNav';
 import { format } from 'date-fns';
 import { CheckCircleIcon, XCircleIcon, ArrowDownTrayIcon } from '@heroicons/react/24/outline';
 import { apiClient } from '@/lib/api-client';
+import useSWR from 'swr';
 
 interface Plate {
   id: string;
@@ -50,9 +51,14 @@ interface TemporaryAccess {
   };
 }
 
+const fetcher = (url: string, token: string) =>
+  apiClient.get(url, { headers: { Authorization: `Bearer ${token}` } });
+
 export default function SecurityDashboardPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
+  const [activeTab, setActiveTab] = useState<'plates' | 'temporary'>('plates');
+  const [filter, setFilter] = useState<'ALL' | 'PENDING' | 'APPROVED' | 'REJECTED' | 'EXPIRED'>('PENDING');
   const [plates, setPlates] = useState<Plate[]>([]);
   const [temporaryAccess, setTemporaryAccess] = useState<TemporaryAccess[]>([]);
   const [loading, setLoading] = useState(true);
@@ -60,8 +66,6 @@ export default function SecurityDashboardPage() {
   const [success, setSuccess] = useState<string | null>(null);
   const [securityUsers, setSecurityUsers] = useState<SecurityUser[]>([]);
   const [selectedSecurity, setSelectedSecurity] = useState<string>('');
-  const [filter, setFilter] = useState<'ALL' | 'PENDING' | 'APPROVED' | 'REJECTED' | 'EXPIRED'>('PENDING');
-  const [activeTab, setActiveTab] = useState<'plates' | 'temporary'>('plates');
   
   // Temporary access form state
   const [tempPlateCode, setTempPlateCode] = useState('');
@@ -87,6 +91,42 @@ export default function SecurityDashboardPage() {
   // State for tracking approve/reject loading
   const [approvingIds, setApprovingIds] = useState<Set<string>>(new Set());
   const [rejectingIds, setRejectingIds] = useState<Set<string>>(new Set());
+
+  const {
+    data: platesData,
+    error: platesError,
+    isLoading: platesLoading,
+    mutate: mutatePlates
+  } = useSWR(
+    status === 'authenticated' && session?.accessToken ? ['/api/security/plates', session.accessToken] : null,
+    ([url, token]) => fetcher(url, token),
+    { refreshInterval: 5000 }
+  );
+
+  const {
+    data: tempAccessData,
+    error: tempAccessError,
+    isLoading: tempAccessLoading,
+    mutate: mutateTempAccess
+  } = useSWR(
+    status === 'authenticated' && session?.accessToken ? ['/api/security/temporary-access', session.accessToken] : null,
+    ([url, token]) => fetcher(url, token),
+    { refreshInterval: 5000 }
+  );
+
+  const {
+    data: securityUsersData,
+    error: securityUsersError,
+    isLoading: securityUsersLoading,
+    mutate: mutateSecurityUsers
+  } = useSWR(
+    status === 'authenticated' && session?.accessToken ? ['/api/security/users', session.accessToken] : null,
+    ([url, token]) => fetcher(url, token)
+  );
+
+  const platesTyped = Array.isArray(platesData) ? platesData : (platesData as Plate[]);
+  const tempAccessTyped = Array.isArray(tempAccessData) ? tempAccessData : (tempAccessData as TemporaryAccess[]);
+  const securityUsersTyped = Array.isArray(securityUsersData) ? securityUsersData : (securityUsersData as SecurityUser[]);
 
   // Auto-fade success messages
   useEffect(() => {
@@ -478,6 +518,14 @@ export default function SecurityDashboardPage() {
     return null;
   }
 
+  if (platesLoading || tempAccessLoading || securityUsersLoading) {
+    return <div>Loading...</div>;
+  }
+
+  if (platesError || tempAccessError || securityUsersError) {
+    return <div>Error: {platesError?.message || tempAccessError?.message || securityUsersError?.message || 'Failed to fetch data'}</div>;
+  }
+
   return (
     <div className="min-h-screen bg-gray-100">
       <SecurityNav />
@@ -724,62 +772,52 @@ export default function SecurityDashboardPage() {
                             {format(new Date(plate.createdAt), 'PPp')}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                            <div className="flex space-x-2">
-                              <button
-                                onClick={() => handleApprove(plate.id)}
-                                disabled={plate.status === 'APPROVED' || plate.status === 'EXPIRED' || approvingIds.has(plate.id) || rejectingIds.has(plate.id)}
-                                className={`inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md transition-colors duration-200 ${
-                                  plate.status === 'APPROVED' || plate.status === 'EXPIRED'
-                                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                                    : approvingIds.has(plate.id)
-                                    ? 'bg-green-100 text-green-700 cursor-not-allowed'
-                                    : 'bg-green-100 text-green-700 hover:bg-green-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500'
-                                }`}
-                                title={plate.status === 'APPROVED' ? 'Already approved' : plate.status === 'EXPIRED' ? 'Cannot approve expired plate' : 'Approve plate request'}
-                              >
-                                {approvingIds.has(plate.id) ? (
-                                  <>
-                                    <svg className="animate-spin -ml-1 mr-1 h-3 w-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                    </svg>
-                                    Approving...
-                                  </>
-                                ) : (
-                                  <>
-                                    <CheckCircleIcon className="h-3 w-3 mr-1" />
-                                    Approve
-                                  </>
-                                )}
-                              </button>
-                              <button
-                                onClick={() => handleReject(plate.id)}
-                                disabled={plate.status === 'REJECTED' || plate.status === 'EXPIRED' || approvingIds.has(plate.id) || rejectingIds.has(plate.id)}
-                                className={`inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md transition-colors duration-200 ${
-                                  plate.status === 'REJECTED' || plate.status === 'EXPIRED'
-                                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                                    : rejectingIds.has(plate.id)
-                                    ? 'bg-red-100 text-red-700 cursor-not-allowed'
-                                    : 'bg-red-100 text-red-700 hover:bg-red-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500'
-                                }`}
-                                title={plate.status === 'REJECTED' ? 'Already rejected' : plate.status === 'EXPIRED' ? 'Cannot reject expired plate' : 'Reject plate request'}
-                              >
-                                {rejectingIds.has(plate.id) ? (
-                                  <>
-                                    <svg className="animate-spin -ml-1 mr-1 h-3 w-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                    </svg>
-                                    Rejecting...
-                                  </>
-                                ) : (
-                                  <>
-                                    <XCircleIcon className="h-3 w-3 mr-1" />
-                                    Reject
-                                  </>
-                                )}
-                              </button>
-                            </div>
+                            {plate.status !== 'EXPIRED' && (
+                              <div className="flex space-x-2">
+                                <button
+                                  onClick={() => handleApprove(plate.id)}
+                                  disabled={approvingIds.has(plate.id) || rejectingIds.has(plate.id)}
+                                  className={`inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md transition-colors duration-200 bg-green-100 text-green-700 hover:bg-green-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500`}
+                                  title={'Approve plate request'}
+                                >
+                                  {approvingIds.has(plate.id) ? (
+                                    <>
+                                      <svg className="animate-spin -ml-1 mr-1 h-3 w-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                      </svg>
+                                      Approving...
+                                    </>
+                                  ) : (
+                                    <>
+                                      <CheckCircleIcon className="h-3 w-3 mr-1" />
+                                      Approve
+                                    </>
+                                  )}
+                                </button>
+                                <button
+                                  onClick={() => handleReject(plate.id)}
+                                  disabled={approvingIds.has(plate.id) || rejectingIds.has(plate.id)}
+                                  className={`inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md transition-colors duration-200 bg-red-100 text-red-700 hover:bg-red-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500`}
+                                  title={'Reject plate request'}
+                                >
+                                  {rejectingIds.has(plate.id) ? (
+                                    <>
+                                      <svg className="animate-spin -ml-1 mr-1 h-3 w-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                      </svg>
+                                      Rejecting...
+                                    </>
+                                  ) : (
+                                    <>
+                                      <XCircleIcon className="h-3 w-3 mr-1" />
+                                      Reject
+                                    </>
+                                  )}
+                                </button>
+                              </div>
+                            )}
                           </td>
                         </tr>
                       ))}

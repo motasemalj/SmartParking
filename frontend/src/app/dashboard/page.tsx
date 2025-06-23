@@ -8,6 +8,7 @@ import Link from 'next/link';
 import { PlusIcon, TrashIcon, ExclamationTriangleIcon, CheckCircleIcon, XMarkIcon } from '@heroicons/react/24/outline';
 import DashboardHeader from './components/DashboardHeader';
 import { apiClient } from '@/lib/api-client';
+import useSWR from 'swr';
 
 interface Plate {
   id: string;
@@ -59,168 +60,101 @@ interface HistoryResponse {
   };
 }
 
+interface PaginationInfo {
+  page: number;
+  limit: number;
+  totalCount: number;
+  totalPages: number;
+  hasNextPage: boolean;
+  hasPrevPage: boolean;
+}
+
+interface FullHistoryResponse {
+  history: Entry[];
+  pagination: PaginationInfo;
+}
+
+const fetcher = (url: string, token: string) =>
+  apiClient.get(url, { headers: { Authorization: `Bearer ${token}` } });
+
 export default function DashboardPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
-  const [plates, setPlates] = useState<Plate[]>([]);
-  const [history, setHistory] = useState<Entry[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [platesLoading, setPlatesLoading] = useState(false);
-  const [historyLoading, setHistoryLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [deletingPlates, setDeletingPlates] = useState<Set<string>>(new Set());
+  const [activeTab, setActiveTab] = useState<'plates' | 'history'>('plates');
+  const [currentPage, setCurrentPage] = useState(1);
   const [showConfirmation, setShowConfirmation] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [removeError, setRemoveError] = useState<string | null>(null);
-  const isInitialLoadRef = useRef(true);
-  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const [deletingPlates, setDeletingPlates] = useState<Set<string>>(new Set());
 
-  const fetchPlates = async (isBackgroundRefresh = false) => {
-    if (!isBackgroundRefresh) {
-      setPlatesLoading(true);
-    }
-    
-    try {
-      const response = await apiClient.get<PlatesResponse>('/api/plates');
+  // SWR for plates
+  const {
+    data: platesData,
+    error: platesError,
+    isLoading: platesLoading,
+    mutate: mutatePlates
+  } = useSWR(
+    status === 'authenticated' && session?.accessToken ? ['/api/plates', session.accessToken] : null,
+    ([url, token]) => fetcher(url, token),
+    { refreshInterval: 30000 }
+  );
+  const plates = Array.isArray(platesData) ? platesData : (platesData as PlatesResponse)?.plates || [];
 
-      // Handle both old and new API response formats
-      if (response.plates) {
-        // New paginated format
-        setPlates(response.plates);
-      } else if (Array.isArray(response)) {
-        // Old format (fallback)
-        setPlates(response as Plate[]);
-      } else {
-        setPlates([]);
-      }
-    } catch (err: any) {
-      console.error('Error fetching plates:', err);
-      if (!isBackgroundRefresh) {
-        setError(err.response?.data?.message || 'Failed to fetch plates');
-      }
-    } finally {
-      if (!isBackgroundRefresh) {
-        setPlatesLoading(false);
-      }
-    }
-  };
+  // SWR for recent history (5 entries)
+  const {
+    data: historyData,
+    error: historyError,
+    isLoading: historyLoading,
+    mutate: mutateHistory
+  } = useSWR(
+    status === 'authenticated' && session?.accessToken ? ['/api/plates/history?limit=5', session.accessToken] : null,
+    ([url, token]) => fetcher(url, token),
+    { refreshInterval: 30000 }
+  );
+  const history = (historyData as HistoryResponse)?.history || [];
 
-  const fetchHistory = async (isBackgroundRefresh = false) => {
-    if (!isBackgroundRefresh) {
-      setHistoryLoading(true);
-    }
-    
-    try {
-      const response = await apiClient.get<HistoryResponse>('/api/plates/history?limit=5');
-
-      // Handle both old and new API response formats
-      if (response.history) {
-        // New paginated format
-        setHistory(response.history);
-      } else if (Array.isArray(response)) {
-        // Old format (fallback)
-        setHistory(response as Entry[]);
-      } else {
-        setHistory([]);
-      }
-    } catch (err) {
-      console.error('Error fetching history:', err);
-      // Don't set error for background refreshes
-    } finally {
-      if (!isBackgroundRefresh) {
-        setHistoryLoading(false);
-      }
-    }
-  };
-
-  // Background refresh functions that don't affect loading state
-  const backgroundRefreshPlates = () => fetchPlates(true);
-  const backgroundRefreshHistory = () => fetchHistory(true);
+  // SWR for full entry history (paginated)
+  const {
+    data: fullHistoryData,
+    error: fullHistoryError,
+    isLoading: fullHistoryLoading,
+    mutate: mutateFullHistory
+  } = useSWR(
+    status === 'authenticated' && session?.accessToken && activeTab === 'history'
+      ? [`/api/plates/history?page=${currentPage}&limit=20`, session.accessToken]
+      : null,
+    ([url, token]) => fetcher(url, token)
+  );
+  const fullHistory = (fullHistoryData as FullHistoryResponse)?.history || [];
+  const pagination = (fullHistoryData as FullHistoryResponse)?.pagination || null;
 
   useEffect(() => {
     if (status === 'unauthenticated') {
       router.push('/auth/login');
-      return;
     }
+  }, [status, router]);
 
-    if (status === 'loading') {
-      setLoading(true);
-      return;
-    }
+  const handleTabChange = (tab: 'plates' | 'history') => {
+    setActiveTab(tab);
+    if (tab === 'history') setCurrentPage(1);
+  };
 
-    const loadData = async () => {
-      setLoading(true);
-      setError(null);
-      
-      if (status === 'authenticated') {
-        // Start both requests in parallel but handle them independently
-        fetchPlates();
-        fetchHistory();
-        
-        // Set loading to false after a short delay to allow partial data to show
-        setTimeout(() => {
-          setLoading(false);
-          isInitialLoadRef.current = false;
-        }, 1000);
-      } else {
-        setLoading(false);
-        isInitialLoadRef.current = false;
-      }
-    };
-
-    loadData();
-  }, [session, status, router]);
-
-  // Polling for real-time updates (runs only when authenticated)
-  useEffect(() => {
-    // Always clear any existing interval first
-    if (pollingIntervalRef.current) {
-      clearInterval(pollingIntervalRef.current);
-      pollingIntervalRef.current = null;
-    }
-
-    if (status === 'authenticated') {
-      // Immediately fetch in the background once (so user sees updates sooner)
-      backgroundRefreshPlates();
-      backgroundRefreshHistory();
-
-      // Then start polling every 30 seconds
-      pollingIntervalRef.current = setInterval(() => {
-        backgroundRefreshPlates();
-        backgroundRefreshHistory();
-      }, 30000);
-    }
-
-    // Cleanup on unmount or when status changes
-    return () => {
-      if (pollingIntervalRef.current) {
-        clearInterval(pollingIntervalRef.current);
-        pollingIntervalRef.current = null;
-      }
-    };
-  }, [status]);
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+  };
 
   const handleRemovePlate = async (plateId: string) => {
     try {
       setDeletingPlates(prev => new Set(prev).add(plateId));
       setRemoveError(null);
-      
       await apiClient.delete(`/api/plates/${plateId}`);
-      
-      // Find the plate details for success message
-      const plateToRemove = plates.find(plate => plate.id === plateId);
-      const plateDisplay = plateToRemove ? `${plateToRemove.plateCode} ${plateToRemove.plateNumber}` : 'Plate';
-      
-      setPlates((prevPlates) => prevPlates.filter((plate) => plate.id !== plateId));
-      setSuccessMessage(`${plateDisplay} has been successfully removed`);
-      
-      // Clear success message after 3 seconds
+      setSuccessMessage('Plate has been successfully removed');
+      mutatePlates();
+      mutateHistory();
+      mutateFullHistory();
       setTimeout(() => setSuccessMessage(null), 3000);
     } catch (err: any) {
-      console.error('Error removing plate:', err);
       setRemoveError(err.response?.data?.message || 'Failed to remove plate. Please try again.');
-      
-      // Clear error message after 5 seconds
       setTimeout(() => setRemoveError(null), 5000);
     } finally {
       setDeletingPlates(prev => {
@@ -232,13 +166,8 @@ export default function DashboardPage() {
     }
   };
 
-  const confirmRemove = (plateId: string) => {
-    setShowConfirmation(plateId);
-  };
-
-  const cancelRemove = () => {
-    setShowConfirmation(null);
-  };
+  const confirmRemove = (plateId: string) => setShowConfirmation(plateId);
+  const cancelRemove = () => setShowConfirmation(null);
 
   if (status === 'unauthenticated') {
     return null;
@@ -282,7 +211,7 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          <DashboardHeader />
+          <DashboardHeader activeTab={activeTab} onTabChange={handleTabChange} />
 
           {/* Success Message */}
           {successMessage && (
@@ -336,28 +265,9 @@ export default function DashboardPage() {
             </div>
           )}
 
-          {loading && plates.length === 0 ? (
-            <div className="flex justify-center items-center h-64">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
-            </div>
-          ) : error ? (
-            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
-              {error}
-            </div>
-          ) : plates.length === 0 ? (
-            <div className="text-center py-12">
-              <p className="text-gray-500">No plates registered yet</p>
-              <Link
-                href="/dashboard/add-plate"
-                className="mt-4 inline-flex items-center text-sm font-medium text-indigo-600 hover:text-indigo-500"
-              >
-                <PlusIcon className="h-5 w-5 mr-2" />
-                Add your first plate
-              </Link>
-            </div>
-          ) : (
-            <div className="bg-white shadow rounded-lg overflow-hidden">
-              {/* Loading indicator for plates */}
+          {/* Plates Section */}
+          {activeTab === 'plates' && (
+            <>
               {platesLoading && (
                 <div className="p-4 border-b border-gray-200 bg-gray-50">
                   <div className="flex items-center justify-center">
@@ -369,7 +279,7 @@ export default function DashboardPage() {
               
               {/* Mobile card view */}
               <div className="sm:hidden">
-                {plates.map((plate) => (
+                {plates.map((plate: Plate) => (
                   <div key={plate.id} className="border-b border-gray-200 p-4 last:border-b-0">
                     <div className="flex justify-between items-start mb-3">
                       <div className="flex-1">
@@ -492,14 +402,16 @@ export default function DashboardPage() {
                           </div>
                         </div>
                       ) : (
-                        <button
-                          onClick={() => confirmRemove(plate.id)}
-                          disabled={deletingPlates.has(plate.id)}
-                          className="inline-flex items-center text-red-600 hover:text-red-800 font-medium text-left transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          <TrashIcon className="h-4 w-4 mr-2" />
-                          Remove Plate
-                        </button>
+                        <div className="w-fit">
+                          <button
+                            onClick={() => confirmRemove(plate.id)}
+                            disabled={deletingPlates.has(plate.id)}
+                            className="inline-flex items-center text-red-600 hover:text-red-800 font-medium text-left transition-colors disabled:opacity-50 disabled:cursor-not-allowed px-0 py-0 touch-manipulation"
+                          >
+                            <TrashIcon className="h-4 w-4 mr-2" />
+                            Remove Plate
+                          </button>
+                        </div>
                       )}
                     </div>
                   </div>
@@ -520,7 +432,7 @@ export default function DashboardPage() {
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
-                    {plates.map((plate) => (
+                    {plates.map((plate: Plate) => (
                       <tr key={plate.id} className="hover:bg-gray-50 transition">
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="text-sm font-medium text-gray-900">
@@ -618,24 +530,154 @@ export default function DashboardPage() {
                   </tbody>
                 </table>
               </div>
+            </>
+          )}
+
+          {/* Entry History Section */}
+          {activeTab === 'history' && (
+            <div className="bg-white shadow rounded-lg overflow-hidden">
+              {fullHistoryLoading ? (
+                <div className="flex justify-center items-center h-64">
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
+                </div>
+              ) : fullHistory.length === 0 ? (
+                <div className="text-center py-12">
+                  <p className="text-gray-500">No history found</p>
+                </div>
+              ) : (
+                <>
+                  <div className="bg-white shadow overflow-hidden sm:rounded-md">
+                    <ul className="divide-y divide-gray-200">
+                      {fullHistory.map((entry: Entry) => (
+                        <li key={entry.id}>
+                          <div className="px-4 py-4 sm:px-6">
+                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-2 sm:space-y-0">
+                              <div className="flex items-center">
+                                <div
+                                  className={`flex-shrink-0 h-8 w-8 rounded-full flex items-center justify-center ${
+                                    entry.type === 'ENTRY'
+                                      ? 'bg-green-100 text-green-800'
+                                      : 'bg-red-100 text-red-800'
+                                  }`}
+                                >
+                                  {entry.type === 'ENTRY' ? 'In' : 'Out'}
+                                </div>
+                                <div className="ml-4">
+                                  <div className="text-sm font-medium text-gray-900">
+                                    {entry.plate.plateCode} {entry.plate.plateNumber}
+                                  </div>
+                                  <div className="text-sm text-gray-500">
+                                    {entry.plate.country}
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="text-sm text-gray-500 sm:text-right">
+                                {format(new Date(entry.timestamp), 'MMM d, yyyy h:mm a')}
+                              </div>
+                            </div>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+
+                  {/* Pagination Controls */}
+                  {pagination && pagination.totalPages > 1 && (
+                    <div className="bg-white px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6 mt-4">
+                      <div className="flex-1 flex justify-between sm:hidden">
+                        <button
+                          onClick={() => handlePageChange(currentPage - 1)}
+                          disabled={!pagination.hasPrevPage}
+                          className="relative inline-flex items-center px-4 py-3 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          Previous
+                        </button>
+                        <button
+                          onClick={() => handlePageChange(currentPage + 1)}
+                          disabled={!pagination.hasNextPage}
+                          className="ml-3 relative inline-flex items-center px-4 py-3 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          Next
+                        </button>
+                      </div>
+                      <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+                        <div>
+                          <p className="text-sm text-gray-700">
+                            Showing{' '}
+                            <span className="font-medium">
+                              {(currentPage - 1) * pagination.limit + 1}
+                            </span>{' '}
+                            to{' '}
+                            <span className="font-medium">
+                              {Math.min(currentPage * pagination.limit, pagination.totalCount)}
+                            </span>{' '}
+                            of <span className="font-medium">{pagination.totalCount}</span> results
+                          </p>
+                        </div>
+                        <div>
+                          <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px">
+                            {/* Previous button */}
+                            <button
+                              onClick={() => handlePageChange(currentPage - 1)}
+                              disabled={!pagination.hasPrevPage}
+                              className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              <span className="sr-only">Previous</span>
+                              ←
+                            </button>
+                            
+                            {/* Page numbers */}
+                            {Array.from({ length: Math.min(pagination.totalPages, 5) }, (_, i) => {
+                              const pageNum = i + 1;
+                              return (
+                                <button
+                                  key={pageNum}
+                                  onClick={() => handlePageChange(pageNum)}
+                                  className={`relative inline-flex items-center px-4 py-2 border text-sm font-medium ${
+                                    pageNum === currentPage
+                                      ? 'z-10 bg-indigo-50 border-indigo-500 text-indigo-600'
+                                      : 'bg-white border-gray-300 text-gray-500 hover:bg-gray-50'
+                                  }`}
+                                >
+                                  {pageNum}
+                                </button>
+                              );
+                            })}
+                            
+                            {/* Next button */}
+                            <button
+                              onClick={() => handlePageChange(currentPage + 1)}
+                              disabled={!pagination.hasNextPage}
+                              className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              <span className="sr-only">Next</span>
+                              →
+                            </button>
+                          </nav>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
             </div>
           )}
 
           {/* Recent History Section */}
-          {history.length > 0 && (
+          {activeTab === 'plates' && history.length > 0 && (
             <div className="mt-6 sm:mt-8">
               <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-4 space-y-2 sm:space-y-0">
                 <h2 className="text-lg font-medium text-gray-900">Recent Activity</h2>
-                <Link
-                  href="/dashboard/history"
+                <button
+                  onClick={() => handleTabChange('history')}
                   className="text-sm text-indigo-600 hover:text-indigo-500"
                 >
                   View all →
-                </Link>
+                </button>
               </div>
               <div className="bg-white shadow rounded-lg">
                 <ul className="divide-y divide-gray-200">
-                  {history.slice(0, 5).map((entry) => (
+                  {history.slice(0, 5).map((entry: Entry) => (
                     <li key={entry.id} className="px-4 sm:px-6 py-4">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center">

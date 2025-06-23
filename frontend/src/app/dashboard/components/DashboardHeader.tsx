@@ -1,7 +1,5 @@
 'use client';
 
-import Link from 'next/link';
-import { usePathname } from 'next/navigation';
 import { ClockIcon } from '@heroicons/react/24/outline';
 
 // Custom License Plate Icon
@@ -24,21 +22,24 @@ const LicensePlateIcon = ({ className }: { className?: string }) => (
   </svg>
 );
 
-export default function DashboardHeader() {
-  const pathname = usePathname();
+interface DashboardHeaderProps {
+  activeTab: 'plates' | 'history';
+  onTabChange: (tab: 'plates' | 'history') => void;
+}
 
+export default function DashboardHeader({ activeTab, onTabChange }: DashboardHeaderProps) {
   const navigation = [
     {
       name: 'My Plates',
-      href: '/dashboard',
+      key: 'plates' as const,
       icon: LicensePlateIcon,
-      current: pathname === '/dashboard',
+      current: activeTab === 'plates',
     },
     {
       name: 'Entry History',
-      href: '/dashboard/history',
+      key: 'history' as const,
       icon: ClockIcon,
-      current: pathname === '/dashboard/history',
+      current: activeTab === 'history',
     },
   ];
 
@@ -50,9 +51,9 @@ export default function DashboardHeader() {
           {navigation.map((item) => {
             const Icon = item.icon;
             return (
-              <Link
+              <button
                 key={item.name}
-                href={item.href}
+                onClick={() => onTabChange(item.key)}
                 className={`
                   flex items-center px-3 py-3 text-sm font-medium rounded-md transition-colors
                   ${
@@ -64,7 +65,7 @@ export default function DashboardHeader() {
               >
                 <Icon className="h-5 w-5 mr-2" />
                 <span>{item.name === 'My Plates' ? 'Plates' : 'Entry History'}</span>
-              </Link>
+              </button>
             );
           })}
         </nav>
@@ -76,9 +77,9 @@ export default function DashboardHeader() {
           {navigation.map((item) => {
             const Icon = item.icon;
             return (
-              <Link
+              <button
                 key={item.name}
-                href={item.href}
+                onClick={() => onTabChange(item.key)}
                 className={`
                   flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors
                   ${
@@ -90,7 +91,7 @@ export default function DashboardHeader() {
               >
                 <Icon className="h-5 w-5 mr-2" />
                 {item.name}
-              </Link>
+              </button>
             );
           })}
         </nav>

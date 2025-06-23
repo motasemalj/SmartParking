@@ -120,7 +120,7 @@ export default function HistoryPage() {
             </div>
           </div>
 
-          <DashboardHeader />
+          <DashboardHeader activeTab="history" onTabChange={() => {}} />
 
           {loading ? (
             <div className="flex justify-center items-center h-64">

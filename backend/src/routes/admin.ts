@@ -36,7 +36,7 @@ router.get('/users', withCache(300), async (req, res) => {
 
 router.post('/users', adminController.createUser);
 
-router.patch('/users/:userId', adminController.updateUserType);
+router.patch('/users/:userId', adminController.updateUser);
 
 router.delete('/users/:userId', adminController.deleteUser);
 
