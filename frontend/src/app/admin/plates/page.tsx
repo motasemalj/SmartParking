@@ -2,7 +2,7 @@
 
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import axios from 'axios';
 import AdminNav from '../components/AdminNav';
 import {
@@ -40,18 +40,7 @@ export default function PlatesPage() {
   const [statusFilter, setStatusFilter] = useState<Plate['status'] | 'ALL'>('ALL');
   const [updatingPlates, setUpdatingPlates] = useState<Set<string>>(new Set());
 
-  useEffect(() => {
-    if (status === 'unauthenticated') {
-      router.push('/auth/login');
-      return;
-    }
-
-    if (status === 'authenticated') {
-      fetchPlates();
-    }
-  }, [session, status, router]);
-
-  const fetchPlates = async () => {
+  const fetchPlates = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
@@ -62,13 +51,25 @@ export default function PlatesPage() {
       });
       console.log('Plates response:', response);
       setPlates(response.data);
-    } catch (err: any) {
+    } catch (error: unknown) {
+      const err = error as { response?: { data?: { message?: string } }; message?: string };
       console.error('Error fetching plates:', err.response?.data || err.message);
       setError(err.response?.data?.message || 'Failed to fetch plates');
     } finally {
       setLoading(false);
     }
-  };
+  }, [session?.accessToken]);
+
+  useEffect(() => {
+    if (status === 'unauthenticated') {
+      router.push('/auth/login');
+      return;
+    }
+
+    if (status === 'authenticated') {
+      fetchPlates();
+    }
+  }, [session, status, router, fetchPlates]);
 
   const handleUpdateStatus = async (plateId: string, newStatus: Plate['status']) => {
     try {
@@ -89,8 +90,9 @@ export default function PlatesPage() {
           plate.id === plateId ? { ...plate, status: newStatus } : plate
         )
       );
-    } catch (err: any) {
-      console.error('Error updating plate status:', err.response?.data || err.message);
+    } catch (error: unknown) {
+      const err = error as { response?: { data?: { message?: string } } };
+      console.error('Error updating plate status:', err.response?.data || error);
       alert(err.response?.data?.message || 'Failed to update plate status');
     } finally {
       setUpdatingPlates(prev => {

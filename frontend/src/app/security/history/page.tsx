@@ -46,7 +46,7 @@ export default function AccessHistoryPage() {
     if (status === 'authenticated') {
       const fetchLogsPolling = async () => {
         try {
-          const response = await apiClient.get('/api/security/history', {
+          const response = await apiClient.get<AccessLog[]>('/api/security/history', {
             params: {
               startDate: dateRange.start,
               endDate: dateRange.end,
@@ -70,7 +70,7 @@ export default function AccessHistoryPage() {
       setLoading(true);
       setError(null);
 
-      const response = await apiClient.get('/api/security/history', {
+      const response = await apiClient.get<AccessLog[]>('/api/security/history', {
         params: {
           startDate: dateRange.start,
           endDate: dateRange.end,
@@ -97,7 +97,7 @@ export default function AccessHistoryPage() {
         responseType: 'blob',
       });
 
-      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const url = window.URL.createObjectURL(new Blob([response.data as BlobPart]));
       const link = document.createElement('a');
       link.href = url;
       link.download = `access-history-${dateRange.start}-to-${dateRange.end}.pdf`;

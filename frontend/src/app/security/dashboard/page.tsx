@@ -125,13 +125,13 @@ export default function SecurityDashboardPage() {
       const fetchDataPolling = async () => {
         try {
           const [platesResponse, tempAccessResponse] = await Promise.all([
-            apiClient.get('/api/security/plates'),
-            apiClient.get('/api/security/temporary-access')
+            apiClient.get<Plate[]>('/api/security/plates'),
+            apiClient.get<TemporaryAccess[]>('/api/security/temporary-access')
           ]);
           setPlates(platesResponse);
           setTemporaryAccess(tempAccessResponse);
-        } catch (err: any) {
-          setError(err.response?.data?.message || 'Failed to fetch data');
+        } catch (error: any) {
+          setError(error.response?.data?.message || 'Failed to fetch data');
         } finally {
           setLoading(false);
         }
@@ -144,13 +144,13 @@ export default function SecurityDashboardPage() {
 
   const fetchSecurityUsers = async () => {
     try {
-      const response = await apiClient.get('/api/security/users');
+      const response = await apiClient.get<SecurityUser[]>('/api/security/users');
       setSecurityUsers(response);
       if (response.length > 0) {
         setSelectedSecurity(response[0].id);
       }
-    } catch (err) {
-      console.error('Error fetching security users:', err);
+    } catch (error) {
+      console.error('Error fetching security users:', error);
     }
   };
 
@@ -159,11 +159,11 @@ export default function SecurityDashboardPage() {
       setLoading(true);
       setError(null);
 
-      const response = await apiClient.get('/api/security/plates');
+      const response = await apiClient.get<Plate[]>('/api/security/plates');
       setPlates(response);
-    } catch (err: any) {
-      console.error('Error fetching plates:', err.response?.data || err.message);
-      setError(err.response?.data?.message || 'Failed to fetch plates');
+    } catch (error: any) {
+      console.error('Error fetching plates:', error.response?.data || error.message);
+      setError(error.response?.data?.message || 'Failed to fetch plates');
     } finally {
       setLoading(false);
     }
@@ -172,19 +172,19 @@ export default function SecurityDashboardPage() {
   // Background refresh function that doesn't set loading state
   const refreshPlates = async () => {
     try {
-      const response = await apiClient.get('/api/security/plates');
+      const response = await apiClient.get<Plate[]>('/api/security/plates');
       setPlates(response);
-    } catch (err: any) {
-      console.error('Error refreshing plates:', err.response?.data || err.message);
+    } catch (error: any) {
+      console.error('Error refreshing plates:', error.response?.data || error.message);
     }
   };
 
   const fetchTemporaryAccess = async () => {
     try {
-      const response = await apiClient.get('/api/security/temporary-access');
+      const response = await apiClient.get<TemporaryAccess[]>('/api/security/temporary-access');
       setTemporaryAccess(response);
-    } catch (err: any) {
-      console.error('Error fetching temporary access:', err.response?.data || err.message);
+    } catch (error: any) {
+      console.error('Error fetching temporary access:', error.response?.data || error.message);
     }
   };
 
@@ -328,7 +328,7 @@ export default function SecurityDashboardPage() {
         responseType: 'blob',
       });
       
-      const blob = new Blob([response.data], { type: 'application/pdf' });
+      const blob = new Blob([response.data as BlobPart], { type: response.headers['content-type'] || 'application/octet-stream' });
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
@@ -695,7 +695,7 @@ export default function SecurityDashboardPage() {
                                     });
                                     
                                     // Create a blob URL and open it in a new tab
-                                    const blob = new Blob([response.data], { 
+                                    const blob = new Blob([response.data as BlobPart], { 
                                       type: response.headers['content-type'] || 'application/octet-stream' 
                                     });
                                     const url = window.URL.createObjectURL(blob);

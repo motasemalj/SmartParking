@@ -91,7 +91,7 @@ export default function ReportsPage() {
         setError(null);
 
         console.log('Fetching report data...');
-        const response = await apiClient.get('/api/admin/reports');
+        const response = await apiClient.get<ReportData>('/api/admin/reports');
         console.log('Report data response:', response);
         console.log('Daily totals:', response.dailyTotals);
         console.log('Recent activity:', response.recentActivity);

@@ -427,7 +427,7 @@ export default function DashboardPage() {
                                 responseType: 'blob',
                               });
                               
-                              const blob = new Blob([response.data], { 
+                              const blob = new Blob([response.data as BlobPart], { 
                                 type: response.headers['content-type'] || 'application/octet-stream' 
                               });
                               const url = window.URL.createObjectURL(blob);
@@ -579,7 +579,7 @@ export default function DashboardPage() {
                                     responseType: 'blob',
                                   });
                                   
-                                  const blob = new Blob([response.data], { 
+                                  const blob = new Blob([response.data as BlobPart], { 
                                     type: response.headers['content-type'] || 'application/octet-stream' 
                                   });
                                   const url = window.URL.createObjectURL(blob);

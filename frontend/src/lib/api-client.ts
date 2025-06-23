@@ -1,6 +1,9 @@
 import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios';
 import { getSession, signOut } from 'next-auth/react';
 
+// Define generic types for better type safety
+type ApiResponse<T> = T;
+
 class ApiClient {
   private axiosInstance: AxiosInstance;
 
@@ -74,38 +77,38 @@ class ApiClient {
   }
 
   // Generic request method
-  async request<T = any>(config: AxiosRequestConfig): Promise<T> {
+  async request<T = unknown>(config: AxiosRequestConfig): Promise<ApiResponse<T>> {
     const response = await this.axiosInstance.request<T>(config);
     return response.data;
   }
 
   // GET request
-  async get<T = any>(url: string, config?: AxiosRequestConfig): Promise<T> {
+  async get<T = unknown>(url: string, config?: AxiosRequestConfig): Promise<ApiResponse<T>> {
     return this.request<T>({ ...config, method: 'GET', url });
   }
 
   // POST request
-  async post<T = any>(url: string, data?: any, config?: AxiosRequestConfig): Promise<T> {
+  async post<T = unknown, D = unknown>(url: string, data?: D, config?: AxiosRequestConfig): Promise<ApiResponse<T>> {
     return this.request<T>({ ...config, method: 'POST', url, data });
   }
 
   // PUT request
-  async put<T = any>(url: string, data?: any, config?: AxiosRequestConfig): Promise<T> {
+  async put<T = unknown, D = unknown>(url: string, data?: D, config?: AxiosRequestConfig): Promise<ApiResponse<T>> {
     return this.request<T>({ ...config, method: 'PUT', url, data });
   }
 
   // DELETE request
-  async delete<T = any>(url: string, config?: AxiosRequestConfig): Promise<T> {
+  async delete<T = unknown>(url: string, config?: AxiosRequestConfig): Promise<ApiResponse<T>> {
     return this.request<T>({ ...config, method: 'DELETE', url });
   }
 
   // PATCH request
-  async patch<T = any>(url: string, data?: any, config?: AxiosRequestConfig): Promise<T> {
+  async patch<T = unknown, D = unknown>(url: string, data?: D, config?: AxiosRequestConfig): Promise<ApiResponse<T>> {
     return this.request<T>({ ...config, method: 'PATCH', url, data });
   }
 
   // Raw request method for special cases like blob downloads
-  async rawRequest<T = any>(config: AxiosRequestConfig): Promise<AxiosResponse<T>> {
+  async rawRequest<T = unknown>(config: AxiosRequestConfig): Promise<AxiosResponse<T>> {
     return this.axiosInstance.request<T>(config);
   }
 }

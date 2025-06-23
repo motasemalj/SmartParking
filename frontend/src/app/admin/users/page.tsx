@@ -56,7 +56,7 @@ export default function UsersPage() {
       setError(null);
 
       console.log('Fetching users...');
-      const response = await apiClient.get('/api/admin/users');
+      const response = await apiClient.get<User[]>('/api/admin/users');
       console.log('Users response:', response);
       setUsers(response);
     } catch (err: any) {

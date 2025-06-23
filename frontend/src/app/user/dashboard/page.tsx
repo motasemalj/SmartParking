@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import axios from 'axios';
@@ -25,15 +25,7 @@ export default function UserDashboardPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (status === 'unauthenticated') {
-      router.push('/login');
-    } else if (status === 'authenticated') {
-      fetchPlates();
-    }
-  }, [status, router]);
-
-  const fetchPlates = async () => {
+  const fetchPlates = useCallback(async () => {
     try {
       const response = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/plates`, {
         headers: {
@@ -42,11 +34,19 @@ export default function UserDashboardPage() {
       });
       setPlates(response.data);
       setLoading(false);
-    } catch (err) {
+    } catch (error) {
       setError('Failed to fetch plates');
       setLoading(false);
     }
-  };
+  }, [session?.accessToken]);
+
+  useEffect(() => {
+    if (status === 'unauthenticated') {
+      router.push('/login');
+    } else if (status === 'authenticated') {
+      fetchPlates();
+    }
+  }, [status, router, fetchPlates]);
 
   if (loading) {
     return <div>Loading...</div>;

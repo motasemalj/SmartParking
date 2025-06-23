@@ -59,7 +59,7 @@ export default function AdminDashboardPage() {
     if (status === 'authenticated') {
       const fetchStatsPolling = async () => {
         try {
-          const response = await apiClient.get('/api/admin/stats');
+          const response = await apiClient.get<Stats>('/api/admin/stats');
           setStats(response);
           setLoading(false);
         } catch (err: any) {
@@ -87,7 +87,7 @@ export default function AdminDashboardPage() {
   const fetchUsers = async () => {
     try {
       console.log('Fetching users...');
-      const response = await apiClient.get('/api/admin/users');
+      const response = await apiClient.get<User[]>('/api/admin/users');
       console.log('Users response:', response);
       setUsers(response);
     } catch (err: any) {
