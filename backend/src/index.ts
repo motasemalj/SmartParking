@@ -101,6 +101,21 @@ app.use('/api/auth', authRoutes);
 app.use('/api/plates', platesRoutes);
 app.use('/api/security', securityRoutes);
 
+// Root route
+app.get('/', (_req: Request, res: Response) => {
+  res.json({ 
+    message: 'Smart Parking Platform API',
+    status: 'running',
+    version: '1.0.0',
+    endpoints: {
+      health: '/health',
+      auth: '/api/auth',
+      plates: '/api/plates',
+      security: '/api/security'
+    }
+  });
+});
+
 // Health check endpoint
 app.get('/health', (_req: Request, res: Response) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
