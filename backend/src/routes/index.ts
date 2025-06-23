@@ -12,8 +12,6 @@ const router = Router();
 const upload = multer({ storage: multer.memoryStorage() });
 
 // Auth routes
-router.post('/auth/otp/send', authController.sendOTP);
-router.post('/auth/otp/verify', authController.verifyOTP);
 router.get('/auth/profile', authenticateToken, authController.getProfile);
 
 // Plate routes
