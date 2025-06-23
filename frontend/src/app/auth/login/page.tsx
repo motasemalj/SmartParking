@@ -58,7 +58,14 @@ export default function LoginPage() {
     try {
       const fullPhoneNumber = formatPhoneNumber(phone, selectedCountry.dialCode);
       
-      await axios.post(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/otp/send`, {
+      // Debug logging
+      console.log('NEXT_PUBLIC_API_URL:', process.env.NEXT_PUBLIC_API_URL);
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'https://smartparking-production-b700.up.railway.app';
+      console.log('Using API URL:', apiUrl);
+      console.log('Full URL being called:', `${apiUrl}/api/auth/otp/send`);
+      console.log('Phone number:', fullPhoneNumber);
+      
+      await axios.post(`${apiUrl}/api/auth/otp/send`, {
         phoneNumber: fullPhoneNumber
       });
       setPhoneNumber(fullPhoneNumber);
@@ -66,6 +73,7 @@ export default function LoginPage() {
       setError('');
       reset({ otp: '' });
     } catch (error: unknown) {
+      console.error('OTP send error:', error);
       if (error && typeof error === 'object' && 'response' in error && error.response && typeof error.response === 'object' && 'status' in error.response && error.response.status === 404) {
         setError('This phone number is not in the system. Please contact or call the security office.');
       } else {
