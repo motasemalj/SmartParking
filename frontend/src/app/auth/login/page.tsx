@@ -74,8 +74,14 @@ export default function LoginPage() {
       reset({ otp: '' });
     } catch (error: unknown) {
       console.error('OTP send error:', error);
-      if (error && typeof error === 'object' && 'response' in error && error.response && typeof error.response === 'object' && 'status' in error.response && error.response.status === 404) {
-        setError('This phone number is not in the system. Please contact or call the security office.');
+      if (error && typeof error === 'object' && 'response' in error && error.response && typeof error.response === 'object' && 'status' in error.response) {
+        if (error.response.status === 404) {
+          setError('This phone number is not in the system. Please contact or call the security office.');
+        } else if (error.response.status === 500) {
+          setError('Failed to send SMS. Please check your phone number and try again.');
+        } else {
+          setError('Failed to send OTP. Please try again.');
+        }
       } else {
         setError('Failed to send OTP. Please try again.');
       }
@@ -137,8 +143,8 @@ export default function LoginPage() {
           </h2>
           <p className="mt-2 text-center text-sm text-gray-600">
             {step === 'phone'
-              ? 'We will send you a verification code'
-              : `We sent a code to ${phoneNumber}`}
+              ? 'We will send you a verification code via SMS'
+              : `We sent an SMS with a verification code to ${phoneNumber}`}
           </p>
         </div>
 

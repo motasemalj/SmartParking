@@ -3,7 +3,7 @@ import { prisma } from '../index';
 import jwt from 'jsonwebtoken';
 import { AuthResponse, OTPResponse } from '../types';
 import { redisClient } from '../index';
-import { TwilioService } from '../services/twilio.service';
+import { twilioService } from '../services/twilio.service';
 
 export const sendOTP = async (req: Request, res: Response): Promise<Response<OTPResponse>> => {
   try {
@@ -16,20 +16,8 @@ export const sendOTP = async (req: Request, res: Response): Promise<Response<OTP
       });
     }
 
-    // Validate phone number format
-    const formattedPhoneNumber = phoneNumber.startsWith('+') ? phoneNumber : `+${phoneNumber}`;
-    
-    // Optional: Validate phone number with Twilio (uncomment if needed)
-    // const isValidPhone = await TwilioService.validatePhoneNumber(formattedPhoneNumber);
-    // if (!isValidPhone) {
-    //   return res.status(400).json({
-    //     success: false,
-    //     message: 'Invalid phone number format'
-    //   });
-    // }
-
     // Check if user exists
-    const user = await prisma.user.findUnique({ where: { phoneNumber: formattedPhoneNumber } });
+    const user = await prisma.user.findUnique({ where: { phoneNumber } });
     if (!user) {
       return res.status(404).json({
         success: false,
@@ -37,31 +25,21 @@ export const sendOTP = async (req: Request, res: Response): Promise<Response<OTP
       });
     }
 
-    // Generate 6-digit OTP
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    // Send OTP via Twilio Verify (no need to generate or store OTP manually)
+    const otpSent = await twilioService.sendOTP(phoneNumber);
     
-    // Store OTP in Redis with 5-minute expiration
-    await redisClient.setEx(`otp:${formattedPhoneNumber}`, 300, otp);
-
-    // Send OTP via Twilio SMS
-    const smsSent = await TwilioService.sendOTP(formattedPhoneNumber, otp);
-    
-    if (!smsSent) {
-      // If SMS fails, still log OTP for development but return error
-      console.log(`OTP for ${formattedPhoneNumber}: ${otp} (SMS failed, logged for development)`);
-      
-      // In production, you might want to return an error here
-      if (process.env.NODE_ENV === 'production') {
-        return res.status(500).json({
-          success: false,
-          message: 'Failed to send OTP. Please try again later.'
-        });
-      }
+    if (!otpSent) {
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to send OTP via SMS. Please try again.'
+      });
     }
+
+    console.log(`OTP verification initiated via Twilio Verify for ${phoneNumber}`);
 
     return res.json({
       success: true,
-      message: 'OTP sent successfully'
+      message: 'OTP sent successfully to your phone'
     });
   } catch (error) {
     console.error('Error sending OTP:', error);
@@ -82,13 +60,10 @@ export const verifyOTP = async (req: Request, res: Response): Promise<Response<A
       });
     }
 
-    // Format phone number consistently
-    const formattedPhoneNumber = phoneNumber.startsWith('+') ? phoneNumber : `+${phoneNumber}`;
+    // Verify OTP via Twilio Verify
+    const verification = await twilioService.verifyOTP(phoneNumber, otp);
 
-    // Get stored OTP from Redis
-    const storedOTP = await redisClient.get(`otp:${formattedPhoneNumber}`);
-
-    if (!storedOTP || storedOTP !== otp) {
+    if (!verification.success) {
       return res.status(400).json({
         error: 'Invalid or expired OTP'
       });
@@ -96,7 +71,7 @@ export const verifyOTP = async (req: Request, res: Response): Promise<Response<A
 
     // Find user (do not create)
     const user = await prisma.user.findUnique({
-      where: { phoneNumber: formattedPhoneNumber }
+      where: { phoneNumber }
     });
 
     if (!user) {
@@ -131,8 +106,7 @@ export const verifyOTP = async (req: Request, res: Response): Promise<Response<A
     // Store refresh token in Redis for blacklisting capability
     await redisClient.setEx(`refresh_token:${user.id}`, 7 * 24 * 60 * 60, refreshToken);
 
-    // Delete OTP from Redis
-    await redisClient.del(`otp:${formattedPhoneNumber}`);
+    // Note: Twilio Verify automatically handles OTP cleanup
 
     return res.json({
       accessToken,

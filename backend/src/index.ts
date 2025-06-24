@@ -27,10 +27,8 @@ for (const envVar of requiredEnvVars) {
 const app = express();
 const port = process.env.PORT || 5002;
 
-// Initialize Prisma client with optimized configuration
-export const prisma = new PrismaClient({
-  log: process.env.NODE_ENV === 'development' ? ['query', 'info', 'warn', 'error'] : ['error'],
-});
+// Initialize Prisma client with minimal configuration
+export const prisma = new PrismaClient();
 
 // Initialize Redis client
 export const redisClient = createClient({
