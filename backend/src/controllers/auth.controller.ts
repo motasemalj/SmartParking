@@ -3,6 +3,7 @@ import { prisma } from '../index';
 import jwt from 'jsonwebtoken';
 import { AuthResponse, OTPResponse } from '../types';
 import { redisClient } from '../index';
+import { TwilioService } from '../services/twilio.service';
 
 export const sendOTP = async (req: Request, res: Response): Promise<Response<OTPResponse>> => {
   try {
@@ -15,8 +16,20 @@ export const sendOTP = async (req: Request, res: Response): Promise<Response<OTP
       });
     }
 
+    // Validate phone number format
+    const formattedPhoneNumber = phoneNumber.startsWith('+') ? phoneNumber : `+${phoneNumber}`;
+    
+    // Optional: Validate phone number with Twilio (uncomment if needed)
+    // const isValidPhone = await TwilioService.validatePhoneNumber(formattedPhoneNumber);
+    // if (!isValidPhone) {
+    //   return res.status(400).json({
+    //     success: false,
+    //     message: 'Invalid phone number format'
+    //   });
+    // }
+
     // Check if user exists
-    const user = await prisma.user.findUnique({ where: { phoneNumber } });
+    const user = await prisma.user.findUnique({ where: { phoneNumber: formattedPhoneNumber } });
     if (!user) {
       return res.status(404).json({
         success: false,
@@ -28,10 +41,23 @@ export const sendOTP = async (req: Request, res: Response): Promise<Response<OTP
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
     
     // Store OTP in Redis with 5-minute expiration
-    await redisClient.setEx(`otp:${phoneNumber}`, 300, otp);
+    await redisClient.setEx(`otp:${formattedPhoneNumber}`, 300, otp);
 
-    // Log OTP for development (remove in production)
-    console.log(`OTP for ${phoneNumber}: ${otp}`);
+    // Send OTP via Twilio SMS
+    const smsSent = await TwilioService.sendOTP(formattedPhoneNumber, otp);
+    
+    if (!smsSent) {
+      // If SMS fails, still log OTP for development but return error
+      console.log(`OTP for ${formattedPhoneNumber}: ${otp} (SMS failed, logged for development)`);
+      
+      // In production, you might want to return an error here
+      if (process.env.NODE_ENV === 'production') {
+        return res.status(500).json({
+          success: false,
+          message: 'Failed to send OTP. Please try again later.'
+        });
+      }
+    }
 
     return res.json({
       success: true,
@@ -56,8 +82,11 @@ export const verifyOTP = async (req: Request, res: Response): Promise<Response<A
       });
     }
 
+    // Format phone number consistently
+    const formattedPhoneNumber = phoneNumber.startsWith('+') ? phoneNumber : `+${phoneNumber}`;
+
     // Get stored OTP from Redis
-    const storedOTP = await redisClient.get(`otp:${phoneNumber}`);
+    const storedOTP = await redisClient.get(`otp:${formattedPhoneNumber}`);
 
     if (!storedOTP || storedOTP !== otp) {
       return res.status(400).json({
@@ -67,7 +96,7 @@ export const verifyOTP = async (req: Request, res: Response): Promise<Response<A
 
     // Find user (do not create)
     const user = await prisma.user.findUnique({
-      where: { phoneNumber }
+      where: { phoneNumber: formattedPhoneNumber }
     });
 
     if (!user) {
@@ -103,7 +132,7 @@ export const verifyOTP = async (req: Request, res: Response): Promise<Response<A
     await redisClient.setEx(`refresh_token:${user.id}`, 7 * 24 * 60 * 60, refreshToken);
 
     // Delete OTP from Redis
-    await redisClient.del(`otp:${phoneNumber}`);
+    await redisClient.del(`otp:${formattedPhoneNumber}`);
 
     return res.json({
       accessToken,
